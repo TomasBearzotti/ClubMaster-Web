@@ -208,7 +208,7 @@ export default function TorneosPage() {
     }
   }
 
-  const checkInscripciones = async () => {
+const checkInscripciones = async () => {
     if (!currentUser) return
 
     const inscripcionesMap: Record<number, MiInscripcion> = {}
@@ -227,6 +227,46 @@ export default function TorneosPage() {
 
     setInscripciones(inscripcionesMap)
   }
+
+// También modifica la función que renderiza los botones para debug:
+const renderBotonesAccion = (torneo: Torneo) => {
+  const miInscripcion = inscripciones[torneo.IdTorneo]
+  const estoyInscrito = miInscripcion?.inscrito || false
+  
+  console.log(`🎮 Renderizando botones para torneo ${torneo.IdTorneo}:`, {
+    miInscripcion,
+    estoyInscrito,
+    torneoEstado: torneo.Estado
+  })
+
+  return (
+    <div className="flex gap-2">
+      <Button variant="outline" size="sm" onClick={() => handleVerParticipantes(torneo)}>
+        <Eye className="h-4 w-4 mr-1" />
+        Ver Participantes
+      </Button>
+      {torneo.Estado === 0 && (
+        <>
+          {estoyInscrito ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => handleDesinscribirClick(torneo)}
+            >
+              <UserMinus className="h-4 w-4 mr-1" />
+              Desinscribirse
+            </Button>
+          ) : (
+            <Button size="sm" onClick={() => handleInscribirClick(torneo)}>
+              <UserPlus className="h-4 w-4 mr-1" />
+              Inscribirse
+            </Button>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
 
   const fetchParticipantes = async (torneoId: number) => {
     try {
@@ -310,15 +350,15 @@ export default function TorneosPage() {
     if (!torneoSeleccionado) return
 
     try {
-      const response = await fetch(`/api/torneos/${torneoSeleccionado.IdTorneo}/desinscribir`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          socioId: currentUser.socioId,
-        }),
-      })
+      const response = await fetch(
+        `/api/torneos/${torneoSeleccionado.IdTorneo}/desinscribir?socioId=${currentUser.socioId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      )
 
       if (response.ok) {
         const result = await response.json()
