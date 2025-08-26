@@ -67,12 +67,12 @@ interface Equipo {
 
 interface Participante {
   IdParticipante: number
-  NombreEquipo: string
-  TipoParticipante: string
-  FechaInscripcion: string
-  EquipoId?: number
-  SocioId?: number
-  NombreReal?: string
+  NombreEquipo: string 
+  TipoParticipante: string 
+  NombreReal: string 
+  esEquipo: boolean
+  socioId?: number
+  equipoId?: number
 }
 
 interface MiInscripcion {
@@ -269,27 +269,29 @@ const renderBotonesAccion = (torneo: Torneo) => {
 }
 
   const fetchParticipantes = async (torneoId: number) => {
-    try {
-      const response = await fetch(`/api/torneos/${torneoId}/participantes`)
-      if (response.ok) {
-        const data = await response.json()
-        setParticipantes(data)
-      } else {
-        toast({
-          title: "Error",
-          description: "No se pudieron cargar los participantes.",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("Error fetching participantes:", error)
+  try {
+    const response = await fetch(`/api/torneos/${torneoId}/participantes`)
+    if (response.ok) {
+      const data = await response.json()
+      console.log('🎯 Participantes recibidos:', data)
+      setParticipantes(data)
+    } else {
+      console.error('❌ Error en response:', response.status)
       toast({
         title: "Error",
-        description: "Ocurrió un error al cargar los participantes.",
+        description: "No se pudieron cargar los participantes.",
         variant: "destructive",
       })
     }
+  } catch (error) {
+    console.error("❌ Error fetching participantes:", error)
+    toast({
+      title: "Error",
+      description: "Ocurrió un error al cargar los participantes.",
+      variant: "destructive",
+    })
   }
+}
 
   const handleInscribir = async () => {
     if (!torneoSeleccionado) return
@@ -852,7 +854,11 @@ const renderBotonesAccion = (torneo: Torneo) => {
                   <TableBody>
                     {participantes.map((participante) => (
                       <TableRow key={participante.IdParticipante}>
-                        <TableCell className="font-medium">{participante.NombreEquipo}</TableCell>
+                        <TableCell className="font-medium">
+                          {participante.TipoParticipante === "Equipo"
+                          ? participante.NombreEquipo
+                          : participante.NombreReal}
+                        </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="flex items-center gap-1 w-fit">
                             {participante.TipoParticipante === "Equipo" ? (
@@ -863,7 +869,11 @@ const renderBotonesAccion = (torneo: Torneo) => {
                             {participante.TipoParticipante}
                           </Badge>
                         </TableCell>
-                        <TableCell>{participante.NombreReal || participante.NombreEquipo}</TableCell>
+                        <TableCell>
+                          {participante.TipoParticipante === "Individual"
+                          ? participante.NombreReal
+                          : ""}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

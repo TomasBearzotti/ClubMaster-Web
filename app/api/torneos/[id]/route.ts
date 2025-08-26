@@ -76,3 +76,46 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     return NextResponse.json({ error: "Error al actualizar torneo" }, { status: 500 })
   }
 }
+
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const torneoId = Number.parseInt(params.id)
+    const { Nombre, Disciplina, FechaInicio, Descripcion, MaxParticipantes, FechaFin, PremioGanador, Estado } =
+    await request.json()
+
+    if (!Nombre || !Disciplina || !FechaInicio) {
+      return NextResponse.json({ error: "Faltan datos obligatorios: nombre, disciplina, fechaInicio" }, { status: 400 })
+    }
+
+    const pool = await getConnection()
+
+    await pool
+    .request()
+    .input("torneoId", sql.Int, torneoId)
+    .input("nombre", sql.NVarChar, Nombre)
+    .input("disciplina", sql.NVarChar, Disciplina)
+    .input("fechaInicio", sql.DateTime2, new Date(FechaInicio))
+    .input("descripcion", sql.NVarChar, Descripcion || null)
+    .input("maxParticipantes", sql.Int, MaxParticipantes || null)
+    .input("fechaFin", sql.DateTime2, FechaFin ? new Date(FechaFin) : null)
+    .input("premioGanador", sql.NVarChar, PremioGanador || null)
+    .input("estado", sql.Int, Estado ?? 0)
+    .query(`
+      UPDATE Torneos
+        SET Nombre = @nombre,
+          Disciplina = @disciplina,
+          FechaInicio = @fechaInicio,
+          Descripcion = @descripcion,
+          MaxParticipantes = @maxParticipantes,
+          FechaFin = @fechaFin,
+          PremioGanador = @premioGanador,
+          Estado = @estado
+        WHERE IdTorneo = @torneoId
+        `)
+
+    return NextResponse.json({ success: true, message: "Torneo actualizado exitosamente" })
+  } catch (error) {
+    console.error("Error actualizando torneo (PUT):", error)
+    return NextResponse.json({ error: "Error al actualizar torneo" }, { status: 500 })
+  }
+}

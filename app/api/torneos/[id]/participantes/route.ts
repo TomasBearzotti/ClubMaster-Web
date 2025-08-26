@@ -20,7 +20,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           CASE 
             WHEN p.EsEquipo = 0 THEN s.Nombre
             ELSE e.Nombre
-          END as NombreCompleto
+          END as NombreCompleto,
+          CASE 
+            WHEN p.EsEquipo = 0 THEN 'Individual'
+            ELSE 'Equipo'
+          END as TipoParticipante
         FROM Participantes p
         LEFT JOIN Socios s ON p.SocioId = s.IdSocio
         LEFT JOIN Equipos e ON p.EquipoId = e.IdEquipo
@@ -29,12 +33,16 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       `)
 
     const participantes = participantesResult.recordset.map((p) => ({
-      id: p.IdParticipante,
-      nombre: p.Nombre,
-      nombreCompleto: p.NombreCompleto,
+      IdParticipante: p.IdParticipante,
+      NombreEquipo: p.Nombre, // Nombre del participante (individual o equipo)
+      TipoParticipante: p.TipoParticipante, // 'Individual' o 'Equipo'
+      NombreReal: p.NombreCompleto, // Nombre real de la persona o equipo
       esEquipo: p.EsEquipo,
       socioId: p.SocioId,
       equipoId: p.EquipoId,
+      // Agregamos campos adicionales para debugging
+      nombre: p.Nombre,
+      nombreCompleto: p.NombreCompleto
     }))
 
     return NextResponse.json(participantes)
