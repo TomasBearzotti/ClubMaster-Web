@@ -8,27 +8,27 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const socioId = searchParams.get("socioId")
 
     if (!socioId) {
-      return NextResponse.json({ error: "socioId es requerido" }, { status: 400 })
+      return NextResponse.json({ error: "SocioId es requerido" }, { status: 400 })
     }
 
-    const socioIdNum = Number.parseInt(socioId)
     const pool = await getConnection()
 
     // Verificar inscripción individual
     const inscripcionIndividual = await pool
       .request()
       .input("torneoId", sql.Int, torneoId)
-      .input("socioId", sql.Int, socioIdNum)
+      .input("socioId", sql.Int, Number.parseInt(socioId))
       .query(`
         SELECT 
-          p.IdParticipante, 
-          p.Nombre as NombreParticipante,
+          p.IdParticipante,
+          p.Nombre,
+          p.EsEquipo,
           p.SocioId,
-          p.EsEquipo
+          p.EquipoId
         FROM Participantes p
         WHERE p.TorneoId = @torneoId 
-        AND p.SocioId = @socioId 
-        AND p.EsEquipo = 0
+          AND p.SocioId = @socioId 
+          AND p.EsEquipo = 0
       `)
 
     if (inscripcionIndividual.recordset.length > 0) {
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         inscrito: true,
         participante: {
           id: participante.IdParticipante,
-          nombre: participante.NombreParticipante,
+          nombre: participante.Nombre,
           esEquipo: false,
           socioId: participante.SocioId,
         },
@@ -48,18 +48,21 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const inscripcionEquipo = await pool
       .request()
       .input("torneoId", sql.Int, torneoId)
-      .input("socioId", sql.Int, socioIdNum)
+      .input("socioId", sql.Int, Number.parseInt(socioId))
       .query(`
         SELECT 
-          p.IdParticipante, 
-          p.Nombre as NombreParticipante, 
+          p.IdParticipante,
+          p.Nombre,
+          p.EsEquipo,
+          p.SocioId,
           p.EquipoId,
-          p.EsEquipo
+          e.Nombre as NombreEquipo
         FROM Participantes p
-        INNER JOIN IntegrantesEquipo ie ON p.EquipoId = ie.EquipoId
+        INNER JOIN Equipos e ON p.EquipoId = e.IdEquipo
+        INNER JOIN IntegrantesEquipo ie ON e.IdEquipo = ie.EquipoId
         WHERE p.TorneoId = @torneoId 
-        AND ie.SocioId = @socioId 
-        AND p.EsEquipo = 1
+          AND ie.SocioId = @socioId 
+          AND p.EsEquipo = 1
       `)
 
     if (inscripcionEquipo.recordset.length > 0) {
@@ -68,15 +71,16 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         inscrito: true,
         participante: {
           id: participante.IdParticipante,
-          nombre: participante.NombreParticipante,
+          nombre: participante.NombreEquipo,
           esEquipo: true,
           equipoId: participante.EquipoId,
         },
       })
     }
 
-    return NextResponse.json({ inscrito: false })
-
+    return NextResponse.json({
+      inscrito: false,
+    })
   } catch (error) {
     console.error("Error verificando inscripción:", error)
     return NextResponse.json({ error: "Error al verificar inscripción" }, { status: 500 })

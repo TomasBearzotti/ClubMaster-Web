@@ -10,23 +10,22 @@ export async function GET(request: NextRequest) {
     let query = `
       SELECT 
         p.IdPartido,
-        p.IdTorneo,
-        p.FechaPartido,
-        p.HoraPartido,
-        p.EquipoA,
-        p.EquipoB,
-        p.Fase,
-        p.Lugar,
-        p.EstadoPartido,
+        p.TorneoId,
+        p.FechaHora,
+        p.Estado,
+        pa.Nombre AS EquipoA,
+        pb.Nombre AS EquipoB,
         p.ArbitroId,
         a.Nombre AS ArbitroNombre
       FROM Partidos p
+      INNER JOIN Participantes pa ON pa.IdParticipante = p.ParticipanteAId
+      LEFT JOIN Participantes pb ON pb.IdParticipante = p.ParticipanteBId
       LEFT JOIN Arbitros a ON p.ArbitroId = a.IdArbitro
     `
     if (torneoId) {
-      query += ` WHERE p.IdTorneo = @torneoId`
+      query += ` WHERE p.TorneoId = @torneoId`
     }
-    query += ` ORDER BY p.FechaPartido, p.HoraPartido`
+    query += ` ORDER BY p.FechaHora`
 
     const requestQuery = pool.request()
     if (torneoId) {
@@ -54,7 +53,7 @@ export async function PUT(request: NextRequest) {
     const result = await pool
       .request()
       .input("idPartido", sql.Int, id)
-      .input("arbitroId", sql.Int, arbitroId === null ? null : arbitroId) // Allow null for unassigning
+      .input("arbitroId", sql.Int, arbitroId === null ? null : arbitroId)
       .query(`
         UPDATE Partidos
         SET ArbitroId = @arbitroId

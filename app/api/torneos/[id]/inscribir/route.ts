@@ -7,16 +7,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const { socioId, tipoInscripcion, equipoId } = await request.json()
 
     if (!socioId || !tipoInscripcion) {
-      return NextResponse.json({ error: "socioId y tipoInscripcion son requeridos" }, { status: 400 })
+      return NextResponse.json({ error: "SocioId y tipoInscripcion son requeridos" }, { status: 400 })
     }
 
     const pool = await getConnection()
 
-    // Verificar que el torneo existe y está abierto
+    // Verificar que el torneo existe y está en estado pendiente
     const torneoResult = await pool
       .request()
       .input("torneoId", sql.Int, torneoId)
-      .query("SELECT Estado, MaxParticipantes FROM Torneos WHERE IdTorneo = @torneoId")
+      .query(`SELECT Estado, MaxParticipantes FROM Torneos WHERE IdTorneo = @torneoId`)
 
     if (torneoResult.recordset.length === 0) {
       return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 })
@@ -24,109 +24,110 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const torneo = torneoResult.recordset[0]
     if (torneo.Estado !== 0) {
-      return NextResponse.json({ error: "El torneo no está abierto para inscripciones" }, { status: 400 })
+      return NextResponse.json({ error: "Solo se puede inscribir a torneos pendientes" }, { status: 400 })
     }
 
     // Verificar límite de participantes
     if (torneo.MaxParticipantes) {
-      const participantesResult = await pool
+      const participantesActuales = await pool
         .request()
         .input("torneoId", sql.Int, torneoId)
-        .query("SELECT COUNT(*) as Total FROM Participantes WHERE TorneoId = @torneoId")
+        .query(`SELECT COUNT(*) as Total FROM Participantes WHERE TorneoId = @torneoId`)
 
-      if (participantesResult.recordset[0].Total >= torneo.MaxParticipantes) {
-        return NextResponse.json({ error: "El torneo ha alcanzado el límite de participantes" }, { status: 400 })
+      if (participantesActuales.recordset[0].Total >= torneo.MaxParticipantes) {
+        return NextResponse.json({ error: "El torneo ha alcanzado el límite máximo de participantes" }, { status: 400 })
       }
     }
 
-    // Verificar inscripción previa
-    const inscripcionPrevia = await pool
+    // Verificar inscripción existente
+    const inscripcionExistente = await pool
       .request()
       .input("torneoId", sql.Int, torneoId)
       .input("socioId", sql.Int, socioId)
       .query(`
-        SELECT COUNT(*) as Total FROM Participantes p
+        SELECT p.IdParticipante 
+        FROM Participantes p
         LEFT JOIN IntegrantesEquipo ie ON p.EquipoId = ie.EquipoId
         WHERE p.TorneoId = @torneoId 
-        AND (p.SocioId = @socioId OR ie.SocioId = @socioId)
+          AND (p.SocioId = @socioId OR ie.SocioId = @socioId)
       `)
 
-    if (inscripcionPrevia.recordset[0].Total > 0) {
+    if (inscripcionExistente.recordset.length > 0) {
       return NextResponse.json({ error: "Ya estás inscrito en este torneo" }, { status: 400 })
     }
 
+    let nombreParticipante: string
+    let esEquipo: number
+    let equipoIdFinal: number | null = null
+    let socioIdFinal: number | null = null
+
     if (tipoInscripcion === "individual") {
-      // Obtener nombre del socio
+      // Inscripción individual
       const socioResult = await pool
         .request()
         .input("socioId", sql.Int, socioId)
-        .query("SELECT Nombre FROM Socios WHERE IdSocio = @socioId")
+        .query(`SELECT Nombre FROM Socios WHERE IdSocio = @socioId`)
 
       if (socioResult.recordset.length === 0) {
         return NextResponse.json({ error: "Socio no encontrado" }, { status: 404 })
       }
 
-      const nombreSocio = socioResult.recordset[0].Nombre
-
-      // Inscripción individual
-      await pool
-        .request()
-        .input("nombre", sql.NVarChar, nombreSocio)
-        .input("esEquipo", sql.Bit, 0)
-        .input("torneoId", sql.Int, torneoId)
-        .input("socioId", sql.Int, socioId)
-        .query(`
-          INSERT INTO Participantes (Nombre, EsEquipo, TorneoId, SocioId, EquipoId)
-          VALUES (@nombre, @esEquipo, @torneoId, @socioId, NULL)
-        `)
-
-      return NextResponse.json({ message: "Inscripción individual exitosa" })
+      nombreParticipante = socioResult.recordset[0].Nombre
+      esEquipo = 0
+      socioIdFinal = socioId
     } else if (tipoInscripcion === "equipo") {
+      // Inscripción por equipo
       if (!equipoId) {
-        return NextResponse.json({ error: "equipoId es requerido para inscripción por equipo" }, { status: 400 })
+        return NextResponse.json({ error: "EquipoId es requerido para inscripción por equipo" }, { status: 400 })
       }
 
       // Verificar que el socio pertenece al equipo
-      const integranteResult = await pool
-        .request()
-        .input("equipoId", sql.Int, equipoId)
-        .input("socioId", sql.Int, socioId)
-        .query("SELECT COUNT(*) as Total FROM IntegrantesEquipo WHERE EquipoId = @equipoId AND SocioId = @socioId")
-
-      if (integranteResult.recordset[0].Total === 0) {
-        return NextResponse.json({ error: "No perteneces a este equipo" }, { status: 400 })
-      }
-
-      // Obtener nombre del equipo
       const equipoResult = await pool
         .request()
         .input("equipoId", sql.Int, equipoId)
-        .query("SELECT Nombre FROM Equipos WHERE IdEquipo = @equipoId")
-
-      if (equipoResult.recordset.length === 0) {
-        return NextResponse.json({ error: "Equipo no encontrado" }, { status: 404 })
-      }
-
-      const nombreEquipo = equipoResult.recordset[0].Nombre
-
-      // Inscripción por equipo
-      await pool
-        .request()
-        .input("nombre", sql.NVarChar, nombreEquipo)
-        .input("esEquipo", sql.Bit, 1)
-        .input("torneoId", sql.Int, torneoId)
-        .input("equipoId", sql.Int, equipoId)
+        .input("socioId", sql.Int, socioId)
         .query(`
-          INSERT INTO Participantes (Nombre, EsEquipo, TorneoId, SocioId, EquipoId)
-          VALUES (@nombre, @esEquipo, @torneoId, NULL, @equipoId)
+          SELECT e.Nombre, e.CapitanId
+          FROM Equipos e
+          INNER JOIN IntegrantesEquipo ie ON e.IdEquipo = ie.EquipoId
+          WHERE e.IdEquipo = @equipoId AND ie.SocioId = @socioId
         `)
 
-      return NextResponse.json({ message: "Inscripción por equipo exitosa" })
+      if (equipoResult.recordset.length === 0) {
+        return NextResponse.json({ error: "No perteneces a este equipo" }, { status: 400 })
+      }
+
+      const equipo = equipoResult.recordset[0]
+      if (equipo.CapitanId !== socioId) {
+        return NextResponse.json({ error: "Solo el capitán puede inscribir al equipo" }, { status: 400 })
+      }
+
+      nombreParticipante = equipo.Nombre
+      esEquipo = 1
+      equipoIdFinal = equipoId
+    } else {
+      return NextResponse.json({ error: "Tipo de inscripción inválido" }, { status: 400 })
     }
 
-    return NextResponse.json({ error: "Tipo de inscripción no válido" }, { status: 400 })
+    // Insertar participante
+    await pool
+      .request()
+      .input("nombre", sql.NVarChar, nombreParticipante)
+      .input("esEquipo", sql.Bit, esEquipo)
+      .input("torneoId", sql.Int, torneoId)
+      .input("socioId", sql.Int, socioIdFinal)
+      .input("equipoId", sql.Int, equipoIdFinal)
+      .query(`
+        INSERT INTO Participantes (Nombre, EsEquipo, TorneoId, SocioId, EquipoId)
+        VALUES (@nombre, @esEquipo, @torneoId, @socioId, @equipoId)
+      `)
+
+    return NextResponse.json({
+      success: true,
+      message: `Inscripción exitosa como ${tipoInscripcion === "individual" ? "participante individual" : "equipo"}`,
+    })
   } catch (error) {
-    console.error("Error en inscripción:", error)
-    return NextResponse.json({ error: "Error al procesar inscripción" }, { status: 500 })
+    console.error("Error inscribiendo:", error)
+    return NextResponse.json({ error: "Error al procesar la inscripción" }, { status: 500 })
   }
 }

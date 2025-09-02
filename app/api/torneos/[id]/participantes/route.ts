@@ -13,14 +13,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .query(`
         SELECT 
           p.IdParticipante,
-          p.Nombre,
           p.EsEquipo,
           p.SocioId,
           p.EquipoId,
           CASE 
             WHEN p.EsEquipo = 0 THEN s.Nombre
             ELSE e.Nombre
-          END as NombreCompleto,
+          END as NombreMostrar,
           CASE 
             WHEN p.EsEquipo = 0 THEN 'Individual'
             ELSE 'Equipo'
@@ -29,20 +28,16 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         LEFT JOIN Socios s ON p.SocioId = s.IdSocio
         LEFT JOIN Equipos e ON p.EquipoId = e.IdEquipo
         WHERE p.TorneoId = @torneoId
-        ORDER BY p.EsEquipo, p.Nombre
+        ORDER BY p.EsEquipo, NombreMostrar
       `)
 
     const participantes = participantesResult.recordset.map((p) => ({
-      IdParticipante: p.IdParticipante,
-      NombreEquipo: p.Nombre, // Nombre del participante (individual o equipo)
-      TipoParticipante: p.TipoParticipante, // 'Individual' o 'Equipo'
-      NombreReal: p.NombreCompleto, // Nombre real de la persona o equipo
+      id: p.IdParticipante,
+      nombre: p.NombreMostrar,        // 👈 este ya es el nombre correcto (persona o equipo)
+      tipo: p.TipoParticipante,       // 'Individual' o 'Equipo'
       esEquipo: p.EsEquipo,
       socioId: p.SocioId,
-      equipoId: p.EquipoId,
-      // Agregamos campos adicionales para debugging
-      nombre: p.Nombre,
-      nombreCompleto: p.NombreCompleto
+      equipoId: p.EquipoId
     }))
 
     return NextResponse.json(participantes)
