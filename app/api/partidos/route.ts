@@ -7,66 +7,74 @@ export async function GET(request: NextRequest) {
     const torneoId = searchParams.get("torneoId")
 
     const pool = await getConnection()
+
     let query = `
       SELECT 
         p.IdPartido,
         p.TorneoId,
-        p.FechaHora,
+        p.FechaPartido,
+        p.HoraPartido,
+        p.Fase,
+        p.Grupo,
+        p.Lugar,
         p.Estado,
-        pa.Nombre AS EquipoA,
-        pb.Nombre AS EquipoB,
+        p.EstadoPartido,
         p.ArbitroId,
-        a.Nombre AS ArbitroNombre
+        CASE 
+          WHEN part1.EsEquipo = 1 THEN e1.Nombre
+          ELSE part1.Nombre
+        END as EquipoA,
+        CASE 
+          WHEN part2.EsEquipo = 1 THEN e2.Nombre
+          ELSE part2.Nombre
+        END as EquipoB,
+        a.Nombre as ArbitroNombre,
+        t.Nombre as TorneoNombre,
+        t.FechaInicio,
+        t.FechaFin
       FROM Partidos p
-      INNER JOIN Participantes pa ON pa.IdParticipante = p.ParticipanteAId
-      LEFT JOIN Participantes pb ON pb.IdParticipante = p.ParticipanteBId
+      INNER JOIN Torneos t ON p.TorneoId = t.IdTorneo
+      LEFT JOIN Participantes part1 ON p.ParticipanteAId = part1.IdParticipante
+      LEFT JOIN Participantes part2 ON p.ParticipanteBId = part2.IdParticipante
+      LEFT JOIN Equipos e1 ON part1.EquipoId = e1.IdEquipo
+      LEFT JOIN Equipos e2 ON part2.EquipoId = e2.IdEquipo
       LEFT JOIN Arbitros a ON p.ArbitroId = a.IdArbitro
     `
+
+    const request_builder = pool.request()
+
     if (torneoId) {
-      query += ` WHERE p.TorneoId = @torneoId`
-    }
-    query += ` ORDER BY p.FechaHora`
-
-    const requestQuery = pool.request()
-    if (torneoId) {
-      requestQuery.input("torneoId", sql.Int, Number.parseInt(torneoId))
+      query += " WHERE p.TorneoId = @torneoId"
+      request_builder.input("torneoId", sql.Int, Number.parseInt(torneoId))
     }
 
-    const result = await requestQuery.query(query)
+    query += " ORDER BY p.FechaPartido ASC, p.HoraPartido ASC, p.Fase ASC"
 
-    return NextResponse.json(result.recordset)
-  } catch (error) {
-    console.error("Error fetching partidos:", error)
-    return NextResponse.json({ error: "Error al obtener partidos" }, { status: 500 })
-  }
-}
+    const result = await request_builder.query(query)
 
-export async function PUT(request: NextRequest) {
-  try {
-    const { id, arbitroId } = await request.json()
+    // Formatear la respuesta
+    const partidos = result.recordset.map((partido) => ({
+      IdPartido: partido.IdPartido,
+      IdTorneo: partido.TorneoId,
+      FechaHora:
+        partido.FechaPartido && partido.HoraPartido
+          ? `${partido.FechaPartido.toISOString().split("T")[0]}T${partido.HoraPartido}`
+          : null,
+      ParticipanteA: partido.EquipoA || "TBD",
+      ParticipanteB: partido.EquipoB || "TBD",
+      Fase: partido.Fase || "Fase de Grupos",
+      Grupo: partido.Grupo,
+      Lugar: partido.Lugar || "Por definir",
+      Estado: partido.Estado || 0,
+      ArbitroNombre: partido.ArbitroNombre,
+      TorneoNombre: partido.TorneoNombre,
+      FechaInicio: partido.FechaInicio?.toISOString(),
+      FechaFin: partido.FechaFin?.toISOString(),
+    }))
 
-    if (!id) {
-      return NextResponse.json({ error: "ID de partido es requerido" }, { status: 400 })
-    }
-
-    const pool = await getConnection()
-    const result = await pool
-      .request()
-      .input("idPartido", sql.Int, id)
-      .input("arbitroId", sql.Int, arbitroId === null ? null : arbitroId)
-      .query(`
-        UPDATE Partidos
-        SET ArbitroId = @arbitroId
-        WHERE IdPartido = @idPartido
-      `)
-
-    if (result.rowsAffected[0] === 0) {
-      return NextResponse.json({ error: "Partido no encontrado o no se pudo actualizar" }, { status: 404 })
-    }
-
-    return NextResponse.json({ success: true, message: "Árbitro asignado exitosamente" })
-  } catch (error) {
-    console.error("Error assigning arbitro to partido:", error)
-    return NextResponse.json({ error: "Error interno del servidor al asignar árbitro" }, { status: 500 })
+    return NextResponse.json(partidos)
+  } catch (error: any) {
+    console.error("Error obteniendo partidos:", error)
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

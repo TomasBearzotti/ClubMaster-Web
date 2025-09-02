@@ -63,11 +63,9 @@ import {
   ChevronDown,
   ChevronRight,
   Eye,
-  UserCheck,
   Clock,
   MoreVertical,
   User,
-  Shield,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -111,15 +109,17 @@ type Participante = {
 interface Partido {
   IdPartido: number;
   IdTorneo: number;
-  FechaPartido: string;
-  HoraPartido: string;
-  EquipoA: string;
-  EquipoB: string;
+  FechaHora?: string;
+  ParticipanteA: string;
+  ParticipanteB: string;
   Fase: string;
+  Grupo?: string;
   Lugar: string;
-  EstadoPartido: string;
-  ArbitroId?: number;
+  Estado: number;
   ArbitroNombre?: string;
+  TorneoNombre: string;
+  FechaInicio: string;
+  FechaFin?: string;
 }
 
 interface Deporte {
@@ -225,7 +225,7 @@ export default function GestionTorneosPage() {
       );
       if (participantesResponse.ok) {
         const participantesData = await participantesResponse.json();
-        console.log("Participantes del torneo:", participantesData); // 👈 acá vemos los equipoId
+        console.log("Participantes del torneo:", participantesData);
         setParticipantesPorTorneo((prev) => ({
           ...prev,
           [torneoId]: participantesData,
@@ -278,7 +278,7 @@ export default function GestionTorneosPage() {
       // Fetch solo si no lo tenemos ya
       if (!integrantesEquipos[equipoId]) {
         try {
-          const res = await fetch(`/api/equipos/${equipoId}/integrantes`); // 🔹 corregido
+          const res = await fetch(`/api/equipos/${equipoId}/integrantes`);
           if (res.ok) {
             const data = await res.json();
             setIntegrantesEquipos((prev) => ({ ...prev, [equipoId]: data }));
@@ -1122,16 +1122,22 @@ export default function GestionTorneosPage() {
                                         </div>
                                         <div className="text-center">
                                           <div className="font-medium">
-                                            {partido.EquipoA} vs{" "}
-                                            {partido.EquipoB}
+                                            {partido.ParticipanteA} vs{" "}
+                                            {partido.ParticipanteB}
                                           </div>
                                           <div className="text-sm text-gray-600 flex items-center justify-center gap-2 mt-1">
                                             <Clock className="h-3 w-3" />
-                                            {format(
-                                              new Date(partido.FechaPartido),
-                                              "dd/MM/yyyy"
-                                            )}{" "}
-                                            - {partido.HoraPartido}
+                                            <span>
+                                              {partido.FechaHora
+                                                ? `${format(
+                                                    new Date(partido.FechaHora),
+                                                    "dd/MM/yyyy"
+                                                  )} - ${format(
+                                                    new Date(partido.FechaHora),
+                                                    "HH:mm"
+                                                  )}`
+                                                : "Próximamente"}
+                                            </span>
                                           </div>
                                           {partido.ArbitroNombre && (
                                             <div className="text-xs text-gray-500 mt-1">

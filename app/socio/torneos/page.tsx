@@ -82,10 +82,9 @@ type Participante = {
 interface Partido {
   IdPartido: number;
   IdTorneo: number;
-  FechaPartido: string;
-  HoraPartido: string;
-  EquipoA: string;
-  EquipoB: string;
+  FechaHora?: string;
+  ParticipanteA: string;
+  ParticipanteB: string;
   Fase: string;
   Lugar: string;
   EstadoPartido: string;
@@ -1322,18 +1321,30 @@ export default function TorneosPage() {
                                             </div>
                                             <div className="text-center">
                                               <div className="font-medium">
-                                                {partido.EquipoA} vs{" "}
-                                                {partido.EquipoB}
+                                                {partido.ParticipanteA} vs{" "}
+                                                {partido.ParticipanteB}
                                               </div>
                                               <div className="text-sm text-gray-600 flex items-center justify-center gap-2 mt-1">
                                                 <Clock className="h-3 w-3" />
-                                                {format(
-                                                  new Date(
-                                                    partido.FechaPartido
-                                                  ),
-                                                  "dd/MM/yyyy"
-                                                )}{" "}
-                                                - {partido.HoraPartido}
+                                                {partido.FechaHora ? (
+                                                  <>
+                                                    {format(
+                                                      new Date(
+                                                        partido.FechaHora
+                                                      ),
+                                                      "dd/MM/yyyy"
+                                                    )}{" "}
+                                                    -{" "}
+                                                    {format(
+                                                      new Date(
+                                                        partido.FechaHora
+                                                      ),
+                                                      "HH:mm"
+                                                    )}
+                                                  </>
+                                                ) : (
+                                                  "Próximamente"
+                                                )}
                                               </div>
                                               {partido.ArbitroNombre && (
                                                 <div className="text-xs text-gray-500 mt-1">
