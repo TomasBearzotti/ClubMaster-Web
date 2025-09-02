@@ -1,465 +1,764 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Label } from "@/components/ui/label"
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
+  DialogTrigger,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+  DialogDescription,
+} from "@/components/ui/dialog";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import {
-  ArrowLeft,
+  Calendar,
   Trophy,
   Users,
-  Eye,
-  UserPlus,
-  UserMinus,
-  Search,
-  Filter,
-  Calendar,
-  Award,
-  X,
   User,
-  UsersIcon,
-} from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+  Clock,
+  CheckCircle,
+  XCircle,
+  Search,
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  Loader2,
+  ArrowLeft,
+  UserMinus,
+  UserPlus,
+  Filter,
+  X,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
 
 interface Torneo {
-  IdTorneo: number
-  Nombre: string
-  Descripcion: string
-  NombreDeporte: string
-  FechaInicio: string
-  FechaFin?: string
-  Estado: number
-  MaxParticipantes?: number
-  PremioGanador?: string
-  ParticipantesActuales: number
+  IdTorneo: number;
+  Nombre: string;
+  Disciplina: string;
+  FechaInicio: string;
+  Estado: number;
+  Participantes: number;
+  Descripcion?: string;
+  MaxParticipantes?: number;
+  FechaFin?: string;
+  PremioGanador?: string;
 }
 
 interface Equipo {
-  IdEquipo: number
-  Nombre: string
-  Disciplina: string
-  CantidadIntegrantes: number
+  IdEquipo: number;
+  Nombre: string;
+  Disciplina: string;
 }
 
-interface Participante {
-  IdParticipante: number
-  NombreEquipo: string 
-  TipoParticipante: string 
-  NombreReal: string 
-  esEquipo: boolean
-  socioId?: number
-  equipoId?: number
+type Participante = {
+  id: number;
+  nombre: string;
+  tipo: string;
+  esEquipo: number;
+  socioId: number | null;
+  equipoId: number | null;
+};
+
+interface Partido {
+  IdPartido: number;
+  IdTorneo: number;
+  FechaPartido: string;
+  HoraPartido: string;
+  EquipoA: string;
+  EquipoB: string;
+  Fase: string;
+  Lugar: string;
+  EstadoPartido: string;
+  ArbitroId?: number;
+  ArbitroNombre?: string;
 }
 
-interface MiInscripcion {
-  inscrito: boolean
+interface InscripcionStatus {
+  inscrito: boolean;
   participante?: {
-    id: number
-    nombre: string
-    esEquipo: boolean
-    equipoId?: number
-    socioId?: number
-  }
+    id: number;
+    nombre: string;
+    esEquipo: boolean;
+    equipoId?: number;
+    socioId?: number;
+  };
 }
+
+interface Filtros {
+  busqueda: string;
+  estado: string;
+  deporte: string;
+  tipoParticipacion: string;
+}
+
+const DEPORTES_INDIVIDUALES = [
+  "Tenis",
+  "Ping Pong",
+  "Ajedrez",
+  "Natacion",
+  "Atletismo",
+  "Ciclismo",
+  "Boxeo",
+  "Karate",
+  "Judo",
+  "Taekwondo",
+];
+
+const DEPORTES_EQUIPOS = [
+  "Futbol",
+  "Futbol 5",
+  "Basquet",
+  "Voley",
+  "Handball",
+  "Hockey",
+  "Rugby",
+  "Tenis",
+  "Paddle",
+];
 
 export default function TorneosPage() {
-  const router = useRouter()
-  const { toast } = useToast()
-  const [torneos, setTorneos] = useState<Torneo[]>([])
-  const [misEquipos, setMisEquipos] = useState<Equipo[]>([])
-  const [participantes, setParticipantes] = useState<Participante[]>([])
-  const [inscripciones, setInscripciones] = useState<Record<number, MiInscripcion>>({})
-  const [loading, setLoading] = useState(true)
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [showInscripcionDialog, setShowInscripcionDialog] = useState(false)
-  const [showParticipantesDialog, setShowParticipantesDialog] = useState(false)
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
-  const [showDesinscripcionDialog, setShowDesinscripcionDialog] = useState(false)
-  const [torneoSeleccionado, setTorneoSeleccionado] = useState<Torneo | null>(null)
-  const [equipoSeleccionado, setEquipoSeleccionado] = useState<number | null>(null)
-  const [tipoInscripcion, setTipoInscripcion] = useState<"individual" | "equipo">("individual")
+  const router = useRouter();
+  const [torneos, setTorneos] = useState<Torneo[]>([]);
+  const [equipos, setEquipos] = useState<Equipo[]>([]);
+  const [deportes, setDeportes] = useState<string[]>([]);
+  const [inscripciones, setInscripciones] = useState<
+    Record<number, InscripcionStatus>
+  >({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [procesando, setProcesando] = useState<number | null>(null);
+  const { toast } = useToast();
 
-  // Filtros
-  const [filtros, setFiltros] = useState({
-    nombre: "",
-    disciplina: "",
+  // Estado para filtros
+  const [filtros, setFiltros] = useState<Filtros>({
+    busqueda: "",
     estado: "",
-  })
+    deporte: "",
+    tipoParticipacion: "",
+  });
+  const [mostrarFiltros, setMostrarFiltros] = useState(false);
 
-  const disciplinasDisponibles = [...new Set(torneos.map((t) => t.NombreDeporte))]
+  // Estado para vista expandida
+  const [torneoExpandido, setTorneoExpandido] = useState<number | null>(null);
+  const [torneosDetalle, setTorneosDetalle] = useState<Record<number, Torneo>>(
+    {}
+  );
+  const [participantesPorTorneo, setParticipantesPorTorneo] = useState<
+    Record<number, Participante[]>
+  >({});
+  const [partidosPorTorneo, setPartidosPorTorneo] = useState<
+    Record<number, Partido[]>
+  >({});
+  const [equiposExpandidos, setEquiposExpandidos] = useState<Set<string>>(
+    new Set()
+  );
+  const [integrantesEquipos, setIntegrantesEquipos] = useState<{
+    [equipoId: number]: any[];
+  }>({});
+  const [loadingDetalles, setLoadingDetalles] = useState<Set<number>>(
+    new Set()
+  );
 
-  // Funciones para determinar tipos de participación permitidos
-  const permiteParticipacionIndividual = (disciplina: string): boolean => {
-    const disciplinasIndividuales = [
-      "tenis single",
-      "tenis singles",
-      "ping pong",
-      "ajedrez",
-      "natacion",
-      "atletismo",
-      "ciclismo",
-      "boxeo",
-      "karate",
-      "judo",
-      "taekwondo",
-    ]
-
-    return disciplinasIndividuales.some(
-      (d) => disciplina.toLowerCase().includes(d) || d.includes(disciplina.toLowerCase()),
-    )
-  }
-
-  const permiteParticipacionEquipos = (disciplina: string): boolean => {
-    const disciplinasEquipos = [
-      "futbol",
-      "basquet",
-      "voley",
-      "handball",
-      "hockey",
-      "rugby",
-      "tenis doble",
-      "tenis dobles",
-      "paddle",
-    ]
-
-    return disciplinasEquipos.some((d) => disciplina.toLowerCase().includes(d) || d.includes(disciplina.toLowerCase()))
-  }
+  // Simular socioId - en producción vendría del contexto de autenticación
+  const socioId = 1;
 
   useEffect(() => {
-    const userData = localStorage.getItem("user")
-    if (!userData) {
-      router.push("/")
-      return
-    }
-    const user = JSON.parse(userData)
-    if (user.rol !== 2) {
-      router.push("/dashboard")
-      return
-    }
-    setCurrentUser(user)
-    fetchTorneos()
-    fetchMisEquipos(user.socioId)
-  }, [router])
-
-  useEffect(() => {
-    if (currentUser && torneos.length > 0) {
-      checkInscripciones()
-    }
-  }, [currentUser, torneos])
+    fetchTorneos();
+    fetchEquipos();
+    fetchDeportes();
+  }, []);
 
   const fetchTorneos = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const response = await fetch("/api/torneos/publicos")
-      if (response.ok) {
-        const data = await response.json()
-        setTorneos(data)
-      } else {
-        toast({
-          title: "Error",
-          description: "No se pudieron cargar los torneos.",
-          variant: "destructive",
-        })
+      const response = await fetch("/api/torneos");
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    } catch (error) {
-      console.error("Error fetching torneos:", error)
-      toast({
-        title: "Error",
-        description: "Ocurrió un error al cargar los torneos.",
-        variant: "destructive",
-      })
+      const data = await response.json();
+      setTorneos(data);
+
+      // Verificar inscripciones para cada torneo
+      for (const torneo of data) {
+        await checkInscripcion(torneo.IdTorneo);
+      }
+    } catch (error: any) {
+      console.error("Error fetching torneos:", error);
+      setError(`Error al cargar torneos: ${error.message}`);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const fetchMisEquipos = async (socioId: number) => {
+  const fetchEquipos = async () => {
     try {
-      const response = await fetch(`/api/equipos?socioId=${socioId}`)
+      const response = await fetch(`/api/equipos?socioId=${socioId}`);
       if (response.ok) {
-        const data = await response.json()
-        setMisEquipos(data)
+        const data = await response.json();
+        setEquipos(data);
       }
     } catch (error) {
-      console.error("Error fetching equipos:", error)
+      console.error("Error fetching equipos:", error);
     }
-  }
+  };
 
-const checkInscripciones = async () => {
-    if (!currentUser) return
+  const toggleEquipo = async (torneoId: number, equipoId: number) => {
+    const key = `${torneoId}-${equipoId}`;
+    const newExpandidos = new Set(equiposExpandidos);
 
-    const inscripcionesMap: Record<number, MiInscripcion> = {}
-
-    for (const torneo of torneos) {
-      try {
-        const response = await fetch(`/api/torneos/${torneo.IdTorneo}/mi-inscripcion?socioId=${currentUser.socioId}`)
-        if (response.ok) {
-          const data = await response.json()
-          inscripcionesMap[torneo.IdTorneo] = data
+    if (newExpandidos.has(key)) {
+      newExpandidos.delete(key);
+    } else {
+      newExpandidos.add(key);
+      // Fetch solo si no lo tenemos ya
+      if (!integrantesEquipos[equipoId]) {
+        try {
+          const res = await fetch(`/api/equipos/${equipoId}/integrantes`);
+          if (res.ok) {
+            const data = await res.json();
+            setIntegrantesEquipos((prev) => ({ ...prev, [equipoId]: data }));
+          } else {
+            setIntegrantesEquipos((prev) => ({ ...prev, [equipoId]: [] }));
+          }
+        } catch (error) {
+          console.error(error);
+          setIntegrantesEquipos((prev) => ({ ...prev, [equipoId]: [] }));
         }
-      } catch (error) {
-        console.error(`Error checking inscripción for torneo ${torneo.IdTorneo}:`, error)
       }
     }
 
-    setInscripciones(inscripcionesMap)
-  }
+    setEquiposExpandidos(newExpandidos);
+  };
 
-// También modifica la función que renderiza los botones para debug:
-const renderBotonesAccion = (torneo: Torneo) => {
-  const miInscripcion = inscripciones[torneo.IdTorneo]
-  const estoyInscrito = miInscripcion?.inscrito || false
-  
-  console.log(`🎮 Renderizando botones para torneo ${torneo.IdTorneo}:`, {
-    miInscripcion,
-    estoyInscrito,
-    torneoEstado: torneo.Estado
-  })
-
-  return (
-    <div className="flex gap-2">
-      <Button variant="outline" size="sm" onClick={() => handleVerParticipantes(torneo)}>
-        <Eye className="h-4 w-4 mr-1" />
-        Ver Participantes
-      </Button>
-      {torneo.Estado === 0 && (
-        <>
-          {estoyInscrito ? (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => handleDesinscribirClick(torneo)}
-            >
-              <UserMinus className="h-4 w-4 mr-1" />
-              Desinscribirse
-            </Button>
-          ) : (
-            <Button size="sm" onClick={() => handleInscribirClick(torneo)}>
-              <UserPlus className="h-4 w-4 mr-1" />
-              Inscribirse
-            </Button>
-          )}
-        </>
-      )}
-    </div>
-  )
-}
-
-  const fetchParticipantes = async (torneoId: number) => {
-  try {
-    const response = await fetch(`/api/torneos/${torneoId}/participantes`)
-    if (response.ok) {
-      const data = await response.json()
-      console.log('🎯 Participantes recibidos:', data)
-      setParticipantes(data)
-    } else {
-      console.error('❌ Error en response:', response.status)
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los participantes.",
-        variant: "destructive",
-      })
+  const fetchDeportes = async () => {
+    try {
+      const response = await fetch("/api/deportes");
+      if (response.ok) {
+        const data = await response.json();
+        setDeportes(data.map((d: any) => d.Nombre || d));
+      }
+    } catch (error) {
+      console.error("Error fetching deportes:", error);
     }
-  } catch (error) {
-    console.error("❌ Error fetching participantes:", error)
-    toast({
-      title: "Error",
-      description: "Ocurrió un error al cargar los participantes.",
-      variant: "destructive",
-    })
-  }
-}
+  };
 
-  const handleInscribir = async () => {
-    if (!torneoSeleccionado) return
-
-    if (tipoInscripcion === "equipo" && !equipoSeleccionado) {
-      toast({
-        title: "Error",
-        description: "Selecciona un equipo para inscribir.",
-        variant: "destructive",
-      })
-      return
-    }
+  const fetchTorneoDetalle = async (torneoId: number) => {
+    const newLoadingDetalles = new Set(loadingDetalles);
+    newLoadingDetalles.add(torneoId);
+    setLoadingDetalles(newLoadingDetalles);
 
     try {
-      const response = await fetch(`/api/torneos/${torneoSeleccionado.IdTorneo}/inscribir`, {
+      // Obtener detalles del torneo
+      const torneoResponse = await fetch(`/api/torneos/${torneoId}`);
+      if (torneoResponse.ok) {
+        const torneoData = await torneoResponse.json();
+        setTorneosDetalle((prev) => ({ ...prev, [torneoId]: torneoData }));
+      }
+
+      // Obtener participantes
+      const participantesResponse = await fetch(
+        `/api/torneos/${torneoId}/participantes`
+      );
+      if (participantesResponse.ok) {
+        const participantesData = await participantesResponse.json();
+        console.log("Participantes del torneo:", participantesData); // 👈 acá vemos los equipoId
+        setParticipantesPorTorneo((prev) => ({
+          ...prev,
+          [torneoId]: participantesData,
+        }));
+      }
+
+      // Obtener partidos
+      const partidosResponse = await fetch(
+        `/api/partidos?torneoId=${torneoId}`
+      );
+      if (partidosResponse.ok) {
+        const partidosData = await partidosResponse.json();
+        setPartidosPorTorneo((prev) => ({ ...prev, [torneoId]: partidosData }));
+      }
+    } catch (error) {
+      console.error("Error fetching torneo detalle:", error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los detalles del torneo",
+        variant: "destructive",
+      });
+    } finally {
+      const newLoadingDetalles = new Set(loadingDetalles);
+      newLoadingDetalles.delete(torneoId);
+      setLoadingDetalles(newLoadingDetalles);
+    }
+  };
+
+  const handleTorneoClick = (torneoId: number) => {
+    if (torneoExpandido === torneoId) {
+      setTorneoExpandido(null);
+    } else {
+      setTorneoExpandido(torneoId);
+      if (!torneosDetalle[torneoId]) {
+        fetchTorneoDetalle(torneoId);
+      }
+    }
+  };
+
+  const checkInscripcion = async (torneoId: number) => {
+    try {
+      const response = await fetch(
+        `/api/torneos/${torneoId}/mi-inscripcion?socioId=${socioId}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setInscripciones((prev) => ({
+          ...prev,
+          [torneoId]: data,
+        }));
+      }
+    } catch (error) {
+      console.error("Error checking inscripción:", error);
+    }
+  };
+
+  const handleInscripcion = async (
+    torneoId: number,
+    tipoInscripcion: string,
+    equipoId?: number
+  ) => {
+    setProcesando(torneoId);
+    try {
+      const response = await fetch(`/api/torneos/${torneoId}/inscribir`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          equipoId: tipoInscripcion === "equipo" ? equipoSeleccionado : null,
-          socioId: currentUser.socioId,
-          tipoInscripcion: tipoInscripcion,
+          socioId,
+          tipoInscripcion,
+          equipoId: tipoInscripcion === "equipo" ? equipoId : undefined,
         }),
-      })
+      });
+
+      const data = await response.json();
 
       if (response.ok) {
-        const result = await response.json()
         toast({
-          title: "Éxito",
-          description: result.message,
-        })
-        setShowInscripcionDialog(false)
-        setShowConfirmDialog(false)
-        setEquipoSeleccionado(null)
-        setTipoInscripcion("individual")
-        fetchTorneos()
-        checkInscripciones()
-      } else {
-        const error = await response.json()
-        toast({
-          title: "Error",
-          description: error.error || "Error al inscribir.",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("Error inscribiendo:", error)
-      toast({
-        title: "Error",
-        description: "Ocurrió un error al inscribir.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleDesinscribir = async () => {
-    if (!torneoSeleccionado) return
-
-    try {
-      const response = await fetch(
-        `/api/torneos/${torneoSeleccionado.IdTorneo}/desinscribir?socioId=${currentUser.socioId}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          title: "¡Inscripción exitosa!",
+          description: data.message,
+        });
+        await checkInscripcion(torneoId);
+        await fetchTorneos(); // Actualizar contador de participantes
+        if (torneoExpandido === torneoId) {
+          await fetchTorneoDetalle(torneoId); // Actualizar vista expandida
         }
-      )
-
-      if (response.ok) {
-        const result = await response.json()
-        toast({
-          title: "Éxito",
-          description: result.message,
-        })
-        setShowDesinscripcionDialog(false)
-        fetchTorneos()
-        checkInscripciones()
       } else {
-        const error = await response.json()
         toast({
-          title: "Error",
-          description: error.error || "Error al desinscribir.",
+          title: "Error en la inscripción",
+          description: data.error,
           variant: "destructive",
-        })
+        });
       }
     } catch (error) {
-      console.error("Error desinscribiendo:", error)
+      console.error("Error inscribiendo:", error);
       toast({
         title: "Error",
-        description: "Ocurrió un error al desinscribir.",
+        description: "Error al procesar la inscripción",
         variant: "destructive",
-      })
+      });
+    } finally {
+      setProcesando(null);
     }
-  }
+  };
 
-  const handleVerParticipantes = (torneo: Torneo) => {
-    setTorneoSeleccionado(torneo)
-    fetchParticipantes(torneo.IdTorneo)
-    setShowParticipantesDialog(true)
-  }
+  const handleDesinscripcion = async (torneoId: number) => {
+    setProcesando(torneoId);
+    try {
+      const response = await fetch(`/api/torneos/${torneoId}/desinscribir`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ socioId }),
+      });
 
-  const handleInscribirClick = (torneo: Torneo) => {
-    setTorneoSeleccionado(torneo)
+      const data = await response.json();
 
-    // Determinar el tipo de inscripción por defecto
-    const permiteIndividual = permiteParticipacionIndividual(torneo.NombreDeporte)
-    const permiteEquipos = permiteParticipacionEquipos(torneo.NombreDeporte)
-
-    if (permiteIndividual && !permiteEquipos) {
-      setTipoInscripcion("individual")
-    } else if (!permiteIndividual && permiteEquipos) {
-      setTipoInscripcion("equipo")
-    } else {
-      setTipoInscripcion("individual") // Por defecto individual si permite ambos
+      if (response.ok) {
+        toast({
+          title: "Desinscripción exitosa",
+          description: data.message,
+        });
+        await checkInscripcion(torneoId);
+        await fetchTorneos(); // Actualizar contador de participantes
+        if (torneoExpandido === torneoId) {
+          await fetchTorneoDetalle(torneoId); // Actualizar vista expandida
+        }
+      } else {
+        toast({
+          title: "Error en la desinscripción",
+          description: data.error,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error desinscribiendo:", error);
+      toast({
+        title: "Error",
+        description: "Error al procesar la desinscripción",
+        variant: "destructive",
+      });
+    } finally {
+      setProcesando(null);
     }
+  };
 
-    setShowInscripcionDialog(true)
-  }
+  const handleVerPartido = (partidoId: number) => {
+    router.push(`/partidos/${partidoId}`);
+  };
 
-  const handleDesinscribirClick = (torneo: Torneo) => {
-    setTorneoSeleccionado(torneo)
-    setShowDesinscripcionDialog(true)
-  }
-
-  const limpiarFiltros = () => {
-    setFiltros({ nombre: "", disciplina: "", estado: "" })
-  }
-
-  const torneosFiltrados = torneos.filter((torneo) => {
-    const matchNombre = torneo.Nombre.toLowerCase().includes(filtros.nombre.toLowerCase())
-    const matchDisciplina =
-      !filtros.disciplina || filtros.disciplina === "all" || torneo.NombreDeporte === filtros.disciplina
-    const matchEstado = !filtros.estado || filtros.estado === "all" || torneo.Estado.toString() === filtros.estado
-    return matchNombre && matchDisciplina && matchEstado
-  })
+  const getParticipanteIcon = (participante: Participante) => {
+    return Number(participante.esEquipo) === 1 ? (
+      <Users className="h-4 w-4 text-blue-600" />
+    ) : (
+      <User className="h-4 w-4 text-green-600" />
+    );
+  };
 
   const getEstadoBadge = (estado: number) => {
     switch (estado) {
       case 0:
-        return <Badge className="bg-yellow-100 text-yellow-800">Pendiente</Badge>
+        return <Badge variant="secondary">Pendiente</Badge>;
       case 1:
-        return <Badge className="bg-green-100 text-green-800">Activo</Badge>
+        return <Badge variant="default">En Curso</Badge>;
       case 2:
-        return <Badge className="bg-blue-100 text-blue-800">Finalizado</Badge>
+        return <Badge variant="outline">Finalizado</Badge>;
       case 3:
-        return <Badge className="bg-red-100 text-red-800">Cancelado</Badge>
+        return <Badge variant="destructive">Cancelado</Badge>;
       default:
-        return <Badge variant="outline">Desconocido</Badge>
+        return <Badge variant="secondary">Desconocido</Badge>;
     }
-  }
+  };
 
-  const equiposCompatibles = misEquipos.filter(
-    (equipo) =>
-      !torneoSeleccionado || equipo.Disciplina.toLowerCase() === torneoSeleccionado.NombreDeporte.toLowerCase(),
-  )
+  const normalize = (str: string) =>
+    str
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // Quita acentos
+      .trim();
 
-  const handleVolver = () => {
-    router.push("/socio-dashboard")
-  }
+  const getTipoDeporteBadge = (disciplina: string) => {
+    if (!disciplina) {
+      return <Badge variant="outline">No especificado</Badge>;
+    }
+
+    const esIndividual = DEPORTES_INDIVIDUALES.some((d) =>
+      normalize(disciplina).includes(normalize(d))
+    );
+    const esEquipo = DEPORTES_EQUIPOS.some((d) =>
+      normalize(disciplina).includes(normalize(d))
+    );
+
+    return (
+      <div className="flex items-center gap-2">
+        {esIndividual && (
+          <Badge className="flex items-center gap-1 bg-green-100 text-green-800 hover:bg-green-100">
+            <User className="h-3 w-3" /> Individual
+          </Badge>
+        )}
+        {esEquipo && (
+          <Badge className="flex items-center gap-1 bg-blue-100 text-blue-800 hover:bg-blue-100">
+            <Users className="h-3 w-3" /> Equipo
+          </Badge>
+        )}
+        {!esIndividual && !esEquipo && <Badge variant="outline">Otro</Badge>}
+      </div>
+    );
+  };
+
+  const getTipoParticipacion = (disciplina: string) => {
+    if (!disciplina) return "ambos";
+
+    const disciplinaLower = disciplina.toLowerCase();
+    const esIndividual = DEPORTES_INDIVIDUALES.some((d) =>
+      disciplinaLower.includes(d.toLowerCase())
+    );
+    const esEquipo = DEPORTES_EQUIPOS.some((d) =>
+      disciplinaLower.includes(d.toLowerCase())
+    );
+
+    if (esIndividual && esEquipo) {
+      return "ambos";
+    } else if (esIndividual) {
+      return "individual";
+    } else if (esEquipo) {
+      return "equipo";
+    } else {
+      return "ambos";
+    }
+  };
+
+  const InscripcionForm = ({ torneo }: { torneo: Torneo }) => {
+    const [tipoInscripcion, setTipoInscripcion] =
+      useState<string>("individual");
+    const [equipoSeleccionado, setEquipoSeleccionado] = useState<string>("");
+
+    const esIndividual = DEPORTES_INDIVIDUALES.some((d) =>
+      torneo.Disciplina?.toLowerCase().includes(d.toLowerCase())
+    );
+    const esEquipo = DEPORTES_EQUIPOS.some((d) =>
+      torneo.Disciplina?.toLowerCase().includes(d.toLowerCase())
+    );
+
+    const disciplinaLower = torneo.Disciplina?.toLowerCase() || "";
+    const permiteIndividual = esIndividual;
+    const permiteEquipos = esEquipo;
+
+    const equiposCompatibles = equipos.filter(
+      (equipo) => equipo.Disciplina?.toLowerCase() === disciplinaLower
+    );
+
+    const handleSubmit = () => {
+      if (tipoInscripcion === "equipo" && !equipoSeleccionado) {
+        toast({
+          title: "Error",
+          description: "Debes seleccionar un equipo",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      handleInscripcion(
+        torneo.IdTorneo,
+        tipoInscripcion,
+        tipoInscripcion === "equipo"
+          ? Number.parseInt(equipoSeleccionado)
+          : undefined
+      );
+    };
+
+    return (
+      <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+        <h4 className="font-semibold text-blue-800 flex items-center gap-2">
+          <UserPlus className="h-4 w-4" />
+          Inscribirse al Torneo
+        </h4>
+        <RadioGroup value={tipoInscripcion} onValueChange={setTipoInscripcion}>
+          {(permiteIndividual || (!permiteIndividual && !permiteEquipos)) && (
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem
+                value="individual"
+                id={`individual-${torneo.IdTorneo}`}
+              />
+              <Label
+                htmlFor={`individual-${torneo.IdTorneo}`}
+                className="flex items-center gap-2"
+              >
+                <User className="h-4 w-4 text-green-600" />
+                Inscripción Individual
+              </Label>
+            </div>
+          )}
+          {(permiteEquipos || (!permiteIndividual && !permiteEquipos)) && (
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="equipo" id={`equipo-${torneo.IdTorneo}`} />
+              <Label
+                htmlFor={`equipo-${torneo.IdTorneo}`}
+                className="flex items-center gap-2"
+              >
+                <Users className="h-4 w-4 text-blue-600" />
+                Inscripción por Equipo
+              </Label>
+            </div>
+          )}
+        </RadioGroup>
+
+        {tipoInscripcion === "equipo" && (
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Seleccionar equipo</Label>
+            <Select
+              value={equipoSeleccionado}
+              onValueChange={setEquipoSeleccionado}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona un equipo" />
+              </SelectTrigger>
+              <SelectContent>
+                {equiposCompatibles.length === 0 ? (
+                  <SelectItem value="" disabled>
+                    No hay equipos compatibles
+                  </SelectItem>
+                ) : (
+                  equiposCompatibles.map((equipo) => (
+                    <SelectItem
+                      key={equipo.IdEquipo}
+                      value={equipo.IdEquipo.toString()}
+                    >
+                      {equipo.Nombre}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <Button
+          onClick={handleSubmit}
+          disabled={procesando === torneo.IdTorneo}
+          className="w-full bg-blue-600 hover:bg-blue-700"
+        >
+          {procesando === torneo.IdTorneo ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              Procesando...
+            </>
+          ) : (
+            <>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Inscribirse
+            </>
+          )}
+        </Button>
+      </div>
+    );
+  };
+
+  const limpiarFiltros = () => {
+    setFiltros({
+      busqueda: "",
+      estado: "",
+      deporte: "",
+      tipoParticipacion: "",
+    });
+  };
+
+  const filteredTorneos = torneos.filter((torneo) => {
+    // Filtro por búsqueda
+    if (filtros.busqueda) {
+      const busquedaLower = filtros.busqueda.toLowerCase();
+      const nombreMatch =
+        torneo.Nombre?.toLowerCase().includes(busquedaLower) || false;
+      const deporteMatch =
+        torneo.Disciplina?.toLowerCase().includes(busquedaLower) || false;
+      if (!nombreMatch && !deporteMatch) {
+        return false;
+      }
+    }
+
+    // Filtro por estado
+    if (
+      filtros.estado &&
+      filtros.estado !== "all" &&
+      torneo.Estado.toString() !== filtros.estado
+    ) {
+      return false;
+    }
+
+    // Filtro por deporte
+    if (
+      filtros.deporte &&
+      filtros.deporte !== "all" &&
+      torneo.Disciplina !== filtros.deporte
+    ) {
+      return false;
+    }
+
+    // Filtro por tipo de participación
+    if (filtros.tipoParticipacion && filtros.tipoParticipacion !== "all") {
+      const tipoTorneo = getTipoParticipacion(torneo.Disciplina);
+      if (
+        filtros.tipoParticipacion !== "ambos" &&
+        tipoTorneo !== filtros.tipoParticipacion &&
+        tipoTorneo !== "ambos"
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  });
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100">
+        <header className="bg-white shadow-sm border-b border-blue-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <div className="flex items-center">
+                <h1 className="text-2xl font-bold text-blue-700">ClubMaster</h1>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => router.push("/socio-dashboard")}
+                className="flex items-center gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Volver al Dashboard
+              </Button>
+            </div>
+          </div>
+        </header>
+        <div className="container mx-auto p-6">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin mr-2" />
+            <div className="text-lg">Cargando torneos...</div>
+          </div>
+        </div>
       </div>
-    )
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100">
+        <header className="bg-white shadow-sm border-b border-blue-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <div className="flex items-center">
+                <h1 className="text-2xl font-bold text-blue-700">ClubMaster</h1>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => router.push("/socio-dashboard")}
+                className="flex items-center gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Volver al Dashboard
+              </Button>
+            </div>
+          </div>
+        </header>
+        <div className="container mx-auto p-6">
+          <div className="text-center py-12">
+            <XCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Error al cargar
+            </h3>
+            <p className="text-gray-500 mb-4">{error}</p>
+            <Button onClick={fetchTorneos}>Reintentar</Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -471,9 +770,13 @@ const renderBotonesAccion = (torneo: Torneo) => {
             <div className="flex items-center">
               <h1 className="text-2xl font-bold text-blue-700">ClubMaster</h1>
             </div>
-            <Button variant="outline" onClick={handleVolver} className="flex items-center gap-2 bg-transparent">
+            <Button
+              variant="outline"
+              onClick={() => router.push("/socio-dashboard")}
+              className="flex items-center gap-2"
+            >
               <ArrowLeft className="h-4 w-4" />
-              Volver
+              Volver al Dashboard
             </Button>
           </div>
         </div>
@@ -483,409 +786,581 @@ const renderBotonesAccion = (torneo: Torneo) => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-            <Trophy className="h-8 w-8 text-blue-600" />
+            <Trophy className="h-8 w-8 text-yellow-600" />
             Torneos Disponibles
           </h2>
-          <p className="text-gray-600">Explora y participa en los torneos del club</p>
+          <p className="text-gray-600">
+            Explora y participa en los torneos del club
+          </p>
         </div>
 
-        {/* Filtros */}
-        <Card className="mb-6">
+        {/* Filtros y Búsqueda */}
+        <Card className="mb-6 shadow-sm">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Filtros de Búsqueda
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="flex justify-between items-center">
               <div>
-                <label className="text-sm font-medium mb-2 block">Buscar por nombre</label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Nombre del torneo..."
-                    value={filtros.nombre}
-                    onChange={(e) => setFiltros({ ...filtros, nombre: e.target.value })}
-                    className="pl-10"
-                  />
+                <CardTitle className="flex items-center gap-2">
+                  <Search className="h-5 w-5" />
+                  Filtros de Búsqueda
+                </CardTitle>
+                <CardDescription>
+                  Encuentra torneos por diferentes criterios
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => setMostrarFiltros(!mostrarFiltros)}
+                className="flex items-center gap-2"
+              >
+                <Filter className="h-4 w-4" />
+                {mostrarFiltros ? "Ocultar Filtros" : "Mostrar Filtros"}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Búsqueda básica */}
+            <div className="flex gap-2">
+              <Input
+                placeholder="Buscar por nombre o deporte..."
+                className="flex-1"
+                value={filtros.busqueda}
+                onChange={(e) =>
+                  setFiltros({ ...filtros, busqueda: e.target.value })
+                }
+              />
+              <Button variant="outline" size="icon">
+                <Search className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Filtros avanzados */}
+            {mostrarFiltros && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t">
+                {/* Filtro por Estado */}
+                <div className="space-y-2">
+                  <Label>Estado</Label>
+                  <Select
+                    value={filtros.estado}
+                    onValueChange={(value) =>
+                      setFiltros({ ...filtros, estado: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos los estados" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos los estados</SelectItem>
+                      <SelectItem value="0">Pendiente</SelectItem>
+                      <SelectItem value="1">En Curso</SelectItem>
+                      <SelectItem value="2">Finalizado</SelectItem>
+                      <SelectItem value="3">Cancelado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Filtro por Deporte */}
+                <div className="space-y-2">
+                  <Label>Deporte</Label>
+                  <Select
+                    value={filtros.deporte}
+                    onValueChange={(value) =>
+                      setFiltros({ ...filtros, deporte: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos los deportes" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos los deportes</SelectItem>
+                      {deportes.map((deporte) => (
+                        <SelectItem key={deporte} value={deporte}>
+                          {deporte}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Filtro por Tipo de Participación */}
+                <div className="space-y-2">
+                  <Label>Tipo de Participación</Label>
+                  <Select
+                    value={filtros.tipoParticipacion}
+                    onValueChange={(value) =>
+                      setFiltros({ ...filtros, tipoParticipacion: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos los tipos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos los tipos</SelectItem>
+                      <SelectItem value="individual">Individual</SelectItem>
+                      <SelectItem value="equipo">Equipo</SelectItem>
+                      <SelectItem value="ambos">Ambos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Botón Limpiar */}
+                <div className="space-y-2">
+                  <Label>&nbsp;</Label>
+                  <Button
+                    variant="outline"
+                    onClick={limpiarFiltros}
+                    className="w-full bg-transparent"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Limpiar
+                  </Button>
                 </div>
               </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Disciplina</label>
-                <Select
-                  value={filtros.disciplina}
-                  onValueChange={(value) => setFiltros({ ...filtros, disciplina: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todas las disciplinas" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas las disciplinas</SelectItem>
-                    {disciplinasDisponibles.map((disciplina) => (
-                      <SelectItem key={disciplina} value={disciplina}>
-                        {disciplina}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Estado</label>
-                <Select value={filtros.estado} onValueChange={(value) => setFiltros({ ...filtros, estado: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos los estados" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos los estados</SelectItem>
-                    <SelectItem value="0">Pendiente</SelectItem>
-                    <SelectItem value="1">Activo</SelectItem>
-                    <SelectItem value="2">Finalizado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-end">
-                <Button variant="outline" onClick={limpiarFiltros} className="w-full bg-transparent">
-                  <X className="h-4 w-4 mr-2" />
-                  Limpiar
-                </Button>
-              </div>
+            )}
+
+            {/* Contador de resultados */}
+            <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+              Mostrando{" "}
+              <span className="font-semibold">{filteredTorneos.length}</span> de{" "}
+              <span className="font-semibold">{torneos.length}</span> torneos
             </div>
           </CardContent>
         </Card>
 
         {/* Lista de Torneos */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Torneos ({torneosFiltrados.length})</CardTitle>
-            <CardDescription>
-              {torneosFiltrados.length === 0
-                ? "No hay torneos que coincidan con los filtros"
-                : "Lista de torneos disponibles"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {torneosFiltrados.length === 0 ? (
-              <div className="text-center py-8">
-                <Trophy className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">No hay torneos disponibles</p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {torneosFiltrados.map((torneo) => {
-                  const miInscripcion = inscripciones[torneo.IdTorneo]
-                  const estoyInscrito = miInscripcion?.inscrito || false
+        <div className="space-y-4">
+          {filteredTorneos.length === 0 ? (
+            <div className="text-center py-12">
+              <Trophy className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                No se encontraron torneos
+              </h3>
+              <p className="text-gray-500">
+                Intenta ajustar los filtros de búsqueda.
+              </p>
+            </div>
+          ) : (
+            filteredTorneos.map((torneo) => {
+              const inscripcionStatus = inscripciones[torneo.IdTorneo];
+              const estaInscrito = inscripcionStatus?.inscrito || false;
+              const estaExpandido = torneoExpandido === torneo.IdTorneo;
+              const torneoDetalle = torneosDetalle[torneo.IdTorneo];
+              const participantes =
+                participantesPorTorneo[torneo.IdTorneo] || [];
+              const torneoDetalleActual =
+                torneosDetalle[torneo.IdTorneo] || torneo;
+              const partidos = partidosPorTorneo[torneo.IdTorneo] || [];
+              const cargandoDetalle = loadingDetalles.has(torneo.IdTorneo);
 
-                  return (
-                    <Card
-                      key={torneo.IdTorneo}
-                      className={`border-l-4 ${estoyInscrito ? "border-l-green-500 bg-green-50" : "border-l-blue-500"}`}
-                    >
-                      <CardContent className="p-6">
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <h3 className="text-xl font-semibold text-gray-900">{torneo.Nombre}</h3>
-                              {estoyInscrito && (
-                                <Badge className="bg-green-100 text-green-800">
-                                  {miInscripcion.participante?.esEquipo ? "Inscrito (Equipo)" : "Inscrito (Individual)"}
-                                </Badge>
-                              )}
-                            </div>
-                            {torneo.Descripcion && <p className="text-gray-600 mb-2">{torneo.Descripcion}</p>}
-                            <div className="flex items-center gap-4 text-sm text-gray-500">
-                              <span className="flex items-center gap-1">
-                                <Trophy className="h-4 w-4" />
-                                {torneo.NombreDeporte}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Calendar className="h-4 w-4" />
-                                {new Date(torneo.FechaInicio).toLocaleDateString("es-AR")}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Users className="h-4 w-4" />
-                                {torneo.ParticipantesActuales}
-                                {torneo.MaxParticipantes && `/${torneo.MaxParticipantes}`} participantes
-                              </span>
-                              {torneo.PremioGanador && (
-                                <span className="flex items-center gap-1">
-                                  <Award className="h-4 w-4" />
-                                  {torneo.PremioGanador}
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Mostrar tipos de participación permitidos */}
-                            <div className="flex items-center gap-2 mt-2">
-                              {permiteParticipacionIndividual(torneo.NombreDeporte) && (
-                                <Badge variant="outline" className="text-xs">
-                                  <User className="h-3 w-3 mr-1" />
-                                  Individual
-                                </Badge>
-                              )}
-                              {permiteParticipacionEquipos(torneo.NombreDeporte) && (
-                                <Badge variant="outline" className="text-xs">
-                                  <UsersIcon className="h-3 w-3 mr-1" />
-                                  Equipos
-                                </Badge>
-                              )}
-                            </div>
+              return (
+                <div key={torneo.IdTorneo} className="space-y-0">
+                  <Card
+                    className={`transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md ${
+                      estaInscrito
+                        ? "bg-green-50 border-green-200 hover:bg-green-100"
+                        : "hover:bg-gray-50"
+                    } ${estaExpandido ? "ring-2 ring-blue-500 shadow-lg" : ""}`}
+                    onClick={() => handleTorneoClick(torneo.IdTorneo)}
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center">
+                            {estaExpandido ? (
+                              <ChevronDown className="h-4 w-4 text-blue-600" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-gray-500" />
+                            )}
                           </div>
-                          <div className="flex flex-col items-end gap-2">
-                            {getEstadoBadge(torneo.Estado)}
-                            <div className="flex gap-2">
-                              <Button variant="outline" size="sm" onClick={() => handleVerParticipantes(torneo)}>
-                                <Eye className="h-4 w-4 mr-1" />
-                                Ver Participantes
-                              </Button>
-                              {torneo.Estado === 0 && (
-                                <>
-                                  {estoyInscrito ? (
-                                    <Button
-                                      variant="destructive"
-                                      size="sm"
-                                      onClick={() => handleDesinscribirClick(torneo)}
-                                    >
-                                      <UserMinus className="h-4 w-4 mr-1" />
-                                      Desinscribirse
-                                    </Button>
-                                  ) : (
-                                    <Button size="sm" onClick={() => handleInscribirClick(torneo)}>
-                                      <UserPlus className="h-4 w-4 mr-1" />
-                                      Inscribirse
-                                    </Button>
-                                  )}
-                                </>
-                              )}
-                            </div>
+                          <div className="space-y-1">
+                            <CardTitle className="text-lg">
+                              {torneo.Nombre}
+                            </CardTitle>
+                            <CardDescription>
+                              {torneo.Disciplina
+                                ? torneo.Disciplina
+                                : "Disciplina no especificada"}
+                            </CardDescription>
                           </div>
                         </div>
+                        <div className="flex items-center gap-2">
+                          {estaInscrito ? (
+                            <CheckCircle className="h-5 w-5 text-green-600" />
+                          ) : (
+                            <XCircle className="h-5 w-5 text-gray-400" />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {getEstadoBadge(torneo.Estado)}
+                        {getTipoDeporteBadge(torneo.Disciplina)}
+                        {estaInscrito && (
+                          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                            ✓ Inscrito
+                          </Badge>
+                        )}
+                      </div>
+                    </CardHeader>
+
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-blue-500" />
+                          <span>
+                            {new Date(torneo.FechaInicio).toLocaleDateString()}
+                          </span>
+                        </div>
+
+                        {torneo.FechaFin && (
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-orange-500" />
+                            <span>
+                              {new Date(torneo.FechaFin).toLocaleDateString()}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4 text-purple-500" />
+                          <span>
+                            {participantesPorTorneo[torneo.IdTorneo]?.length ||
+                              0}
+                          </span>
+                        </div>
+
+                        {torneo.PremioGanador && (
+                          <div className="flex items-center gap-2">
+                            <Trophy className="h-4 w-4 text-yellow-500" />
+                            <span className="truncate">
+                              {torneo.PremioGanador}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {torneo.Descripcion && (
+                        <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                          {torneo.Descripcion}
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Vista Expandida del Torneo - Debajo del torneo específico */}
+                  {estaExpandido && (
+                    <Card className="transition-all duration-200 shadow-sm hover:shadow-md border border-blue-200">
+                      <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100">
+                        <div>
+                          <CardTitle className="text-xl text-blue-800">
+                            Detalles de {torneoDetalle?.Nombre || torneo.Nombre}
+                          </CardTitle>
+                          <CardDescription className="text-blue-600">
+                            {torneoDetalle?.Disciplina ||
+                              torneo.Disciplina ||
+                              "Deporte no especificado"}
+                          </CardDescription>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="p-6">
+                        {cargandoDetalle ? (
+                          <div className="flex items-center justify-center py-8">
+                            <Loader2 className="h-6 w-6 animate-spin mr-2 text-blue-600" />
+                            <span className="text-gray-600">
+                              Cargando detalles...
+                            </span>
+                          </div>
+                        ) : torneoDetalle ? (
+                          <div className="space-y-6">
+                            {/* Información del Torneo */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+                              <div>
+                                <h4 className="font-semibold text-gray-700 flex items-center gap-2">
+                                  <Calendar className="h-4 w-4" />
+                                  Fechas
+                                </h4>
+                                <p className="text-sm">
+                                  Inicio:{" "}
+                                  {format(
+                                    new Date(torneoDetalle.FechaInicio),
+                                    "dd/MM/yyyy"
+                                  )}
+                                </p>
+                                {torneoDetalle.FechaFin && (
+                                  <p className="text-sm">
+                                    Fin:{" "}
+                                    {format(
+                                      new Date(torneoDetalle.FechaFin),
+                                      "dd/MM/yyyy"
+                                    )}
+                                  </p>
+                                )}
+                              </div>
+                              <div>
+                                <h4 className="font-semibold text-gray-700 flex items-center gap-2">
+                                  <Users className="h-4 w-4" />
+                                  Participantes
+                                </h4>
+                                <p className="text-sm">
+                                  {torneoDetalleActual.Participantes ||
+                                    participantes.length}
+                                  {torneoDetalleActual.MaxParticipantes &&
+                                    ` / ${torneoDetalleActual.MaxParticipantes}`}
+                                </p>
+                              </div>
+                              <div>
+                                <h4 className="font-semibold text-gray-700 flex items-center gap-2">
+                                  <Trophy className="h-4 w-4" />
+                                  Premio
+                                </h4>
+                                <p className="text-sm">
+                                  {torneoDetalle.PremioGanador ||
+                                    "No especificado"}
+                                </p>
+                              </div>
+                            </div>
+
+                            {torneoDetalle.Descripcion && (
+                              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                <h4 className="font-semibold text-blue-800 mb-2">
+                                  Descripción
+                                </h4>
+                                <p className="text-blue-700">
+                                  {torneoDetalle.Descripcion}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Botones de Acción - Solo dentro del dropdown */}
+                            <div onClick={(e) => e.stopPropagation()}>
+                              {estaInscrito ? (
+                                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                                  <div className="flex items-center justify-between">
+                                    <div className="text-sm text-green-600 font-medium flex items-center gap-2">
+                                      <CheckCircle className="h-4 w-4" />
+                                      Inscrito como:{" "}
+                                      {inscripcionStatus.participante?.nombre}
+                                    </div>
+                                    {torneo.Estado === 0 && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                          handleDesinscripcion(torneo.IdTorneo)
+                                        }
+                                        disabled={
+                                          procesando === torneo.IdTorneo
+                                        }
+                                        className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
+                                      >
+                                        <UserMinus className="h-4 w-4 mr-2" />
+                                        {procesando === torneo.IdTorneo
+                                          ? "Procesando..."
+                                          : "Desinscribirse"}
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                torneo.Estado === 0 && (
+                                  <InscripcionForm torneo={torneo} />
+                                )
+                              )}
+                            </div>
+
+                            {/* Contenido Principal: Participantes y Partidos */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                              {/* Participantes - Columna más pequeña */}
+                              <Card className="lg:col-span-1">
+                                <CardHeader className="pb-3">
+                                  <CardTitle className="flex items-center gap-2 text-base">
+                                    <Users className="h-4 w-4" />
+                                    Participantes (
+                                    {participantesPorTorneo[torneo.IdTorneo]
+                                      ?.length || 0}
+                                    )
+                                  </CardTitle>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                  {!participantesPorTorneo[torneo.IdTorneo] ||
+                                  participantesPorTorneo[torneo.IdTorneo]
+                                    .length === 0 ? (
+                                    <p className="text-gray-500 text-center py-4 text-sm">
+                                      No hay participantes inscritos
+                                    </p>
+                                  ) : (
+                                    <div className="space-y-2">
+                                      {participantesPorTorneo[
+                                        torneo.IdTorneo
+                                      ].map((participante) => (
+                                        <div
+                                          key={participante.id}
+                                          className="border rounded-lg p-3 bg-white flex items-center justify-between"
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            {getParticipanteIcon(participante)}
+                                            <span>{participante.nombre}</span>
+                                            <Badge>{participante.tipo}</Badge>
+                                          </div>
+
+                                          {participante.esEquipo &&
+                                            participante.equipoId && (
+                                              <Dialog>
+                                                <DialogTrigger asChild>
+                                                  <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() =>
+                                                      toggleEquipo(
+                                                        torneo.IdTorneo,
+                                                        participante.equipoId!
+                                                      )
+                                                    }
+                                                  >
+                                                    <Eye className="h-4 w-4" />
+                                                  </Button>
+                                                </DialogTrigger>
+
+                                                {equiposExpandidos.has(
+                                                  `${torneo.IdTorneo}-${participante.equipoId}`
+                                                ) && (
+                                                  <DialogContent className="w-96">
+                                                    <DialogHeader>
+                                                      <DialogTitle>
+                                                        Integrantes del equipo
+                                                      </DialogTitle>
+                                                      <DialogDescription>
+                                                        Listado de socios que
+                                                        forman parte del equipo{" "}
+                                                        {participante.nombre}
+                                                      </DialogDescription>
+                                                    </DialogHeader>
+
+                                                    <div className="mt-2 space-y-1">
+                                                      {integrantesEquipos[
+                                                        participante.equipoId
+                                                      ]?.length > 0 ? (
+                                                        integrantesEquipos[
+                                                          participante.equipoId
+                                                        ].map((i: any) => (
+                                                          <div
+                                                            key={i.IdSocio}
+                                                            className="flex items-center gap-2"
+                                                          >
+                                                            <User className="h-4 w-4 text-green-600" />
+                                                            <span>
+                                                              {i.Nombre}
+                                                            </span>
+                                                          </div>
+                                                        ))
+                                                      ) : (
+                                                        <span className="text-gray-500 text-sm">
+                                                          No hay integrantes en
+                                                          este equipo
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                  </DialogContent>
+                                                )}
+                                              </Dialog>
+                                            )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </CardContent>
+                              </Card>
+
+                              {/* Partidos - Columna derecha más grande */}
+                              <Card className="lg:col-span-2">
+                                <CardHeader className="pb-3">
+                                  <CardTitle className="flex items-center gap-2 text-base">
+                                    <Calendar className="h-4 w-4" />
+                                    Partidos (
+                                    {partidosPorTorneo[torneo.IdTorneo]
+                                      ?.length || 0}
+                                    )
+                                  </CardTitle>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                  {!partidosPorTorneo[torneo.IdTorneo] ||
+                                  partidosPorTorneo[torneo.IdTorneo].length ===
+                                    0 ? (
+                                    <div className="text-center py-8">
+                                      <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                                      <p className="text-gray-500 mb-4">
+                                        No se han generado partidos todavía
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-3">
+                                      {partidosPorTorneo[torneo.IdTorneo].map(
+                                        (partido) => (
+                                          <div
+                                            key={partido.IdPartido}
+                                            className="border rounded-lg p-3"
+                                          >
+                                            <div className="flex items-center justify-between mb-2">
+                                              <div className="flex items-center gap-2">
+                                                <Badge variant="outline">
+                                                  {partido.Fase}
+                                                </Badge>
+                                                <span className="text-sm text-gray-600">
+                                                  {partido.Lugar}
+                                                </span>
+                                              </div>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleVerPartido(
+                                                    partido.IdPartido
+                                                  )
+                                                }
+                                              >
+                                                <Eye className="h-4 w-4" />
+                                              </Button>
+                                            </div>
+                                            <div className="text-center">
+                                              <div className="font-medium">
+                                                {partido.EquipoA} vs{" "}
+                                                {partido.EquipoB}
+                                              </div>
+                                              <div className="text-sm text-gray-600 flex items-center justify-center gap-2 mt-1">
+                                                <Clock className="h-3 w-3" />
+                                                {format(
+                                                  new Date(
+                                                    partido.FechaPartido
+                                                  ),
+                                                  "dd/MM/yyyy"
+                                                )}{" "}
+                                                - {partido.HoraPartido}
+                                              </div>
+                                              {partido.ArbitroNombre && (
+                                                <div className="text-xs text-gray-500 mt-1">
+                                                  Árbitro:{" "}
+                                                  {partido.ArbitroNombre}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )
+                                      )}
+                                    </div>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            </div>
+                          </div>
+                        ) : null}
                       </CardContent>
                     </Card>
-                  )
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Dialog Inscripción */}
-        <Dialog open={showInscripcionDialog} onOpenChange={setShowInscripcionDialog}>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Inscribirse al Torneo</DialogTitle>
-              <DialogDescription>
-                Selecciona cómo quieres participar en el torneo "{torneoSeleccionado?.Nombre}"
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-4">
-              {torneoSeleccionado && (
-                <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                  <h4 className="font-medium mb-2">Detalles del Torneo:</h4>
-                  <p className="text-sm text-gray-600">
-                    <strong>Disciplina:</strong> {torneoSeleccionado.NombreDeporte}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    <strong>Fecha:</strong> {new Date(torneoSeleccionado.FechaInicio).toLocaleDateString("es-AR")}
-                  </p>
-                  {torneoSeleccionado.MaxParticipantes && (
-                    <p className="text-sm text-gray-600">
-                      <strong>Cupos:</strong> {torneoSeleccionado.ParticipantesActuales}/
-                      {torneoSeleccionado.MaxParticipantes}
-                    </p>
                   )}
                 </div>
-              )}
-
-              {/* Selector de tipo de inscripción */}
-              {torneoSeleccionado && (
-                <div className="mb-4">
-                  <label className="text-sm font-medium mb-3 block">Tipo de participación:</label>
-                  <RadioGroup
-                    value={tipoInscripcion}
-                    onValueChange={(value: "individual" | "equipo") => setTipoInscripcion(value)}
-                  >
-                    {permiteParticipacionIndividual(torneoSeleccionado.NombreDeporte) && (
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="individual" id="individual" />
-                        <Label htmlFor="individual" className="flex items-center gap-2">
-                          <User className="h-4 w-4" />
-                          Participación Individual
-                        </Label>
-                      </div>
-                    )}
-                    {permiteParticipacionEquipos(torneoSeleccionado.NombreDeporte) && (
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="equipo" id="equipo" />
-                        <Label htmlFor="equipo" className="flex items-center gap-2">
-                          <UsersIcon className="h-4 w-4" />
-                          Participación por Equipo
-                        </Label>
-                      </div>
-                    )}
-                  </RadioGroup>
-                </div>
-              )}
-
-              {/* Selector de equipo (solo si es participación por equipo) */}
-              {tipoInscripcion === "equipo" && (
-                <div className="space-y-3">
-                  <label className="text-sm font-medium">Selecciona tu equipo:</label>
-                  {equiposCompatibles.length === 0 ? (
-                    <div className="text-center py-4">
-                      <p className="text-gray-500 mb-2">
-                        No tienes equipos compatibles con la disciplina "{torneoSeleccionado?.NombreDeporte}"
-                      </p>
-                      <Button
-                        variant="outline"
-                        onClick={() => router.push("/socio/equipos")}
-                        className="bg-transparent"
-                      >
-                        Crear Equipo
-                      </Button>
-                    </div>
-                  ) : (
-                    equiposCompatibles.map((equipo) => (
-                      <div
-                        key={equipo.IdEquipo}
-                        className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                          equipoSeleccionado === equipo.IdEquipo
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-gray-200 hover:border-gray-300"
-                        }`}
-                        onClick={() => setEquipoSeleccionado(equipo.IdEquipo)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">{equipo.Nombre}</p>
-                            <p className="text-sm text-gray-500">{equipo.CantidadIntegrantes} integrantes</p>
-                          </div>
-                          <div className="w-4 h-4 border-2 border-blue-500 rounded-full flex items-center justify-center">
-                            {equipoSeleccionado === equipo.IdEquipo && (
-                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-
-              {tipoInscripcion === "individual" && (
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <p className="text-sm text-blue-800">Te inscribirás como participante individual en este torneo.</p>
-                </div>
-              )}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowInscripcionDialog(false)}>
-                Cancelar
-              </Button>
-              <Button
-                onClick={() => setShowConfirmDialog(true)}
-                disabled={tipoInscripcion === "equipo" && !equipoSeleccionado}
-              >
-                Inscribirse
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Dialog Confirmación Inscripción */}
-        <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confirmar Inscripción</AlertDialogTitle>
-              <AlertDialogDescription>
-                {tipoInscripcion === "individual"
-                  ? `¿Estás seguro de que quieres inscribirte individualmente al torneo "${torneoSeleccionado?.Nombre}"?`
-                  : `¿Estás seguro de que quieres inscribir tu equipo al torneo "${torneoSeleccionado?.Nombre}"?`}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleInscribir}>Confirmar Inscripción</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        {/* Dialog Confirmación Desinscripción */}
-        <AlertDialog open={showDesinscripcionDialog} onOpenChange={setShowDesinscripcionDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confirmar Desinscripción</AlertDialogTitle>
-              <AlertDialogDescription>
-                ¿Estás seguro de que quieres desinscribirte del torneo "{torneoSeleccionado?.Nombre}"? Esta acción
-                eliminará tu participación del torneo.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDesinscribir} className="bg-red-600 hover:bg-red-700">
-                Confirmar Desinscripción
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        {/* Dialog Participantes */}
-        <Dialog open={showParticipantesDialog} onOpenChange={setShowParticipantesDialog}>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Participantes del Torneo</DialogTitle>
-              <DialogDescription>Lista de participantes inscritos en "{torneoSeleccionado?.Nombre}"</DialogDescription>
-            </DialogHeader>
-            <div className="py-4">
-              {participantes.length === 0 ? (
-                <div className="text-center py-4">
-                  <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">No hay participantes inscritos aún</p>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Participante</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Nombre Real</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {participantes.map((participante) => (
-                      <TableRow key={participante.IdParticipante}>
-                        <TableCell className="font-medium">
-                          {participante.TipoParticipante === "Equipo"
-                          ? participante.NombreEquipo
-                          : participante.NombreReal}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="flex items-center gap-1 w-fit">
-                            {participante.TipoParticipante === "Equipo" ? (
-                              <UsersIcon className="h-3 w-3" />
-                            ) : (
-                              <User className="h-3 w-3" />
-                            )}
-                            {participante.TipoParticipante}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {participante.TipoParticipante === "Individual"
-                          ? participante.NombreReal
-                          : ""}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-            <DialogFooter>
-              <Button onClick={() => setShowParticipantesDialog(false)}>Cerrar</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              );
+            })
+          )}
+        </div>
       </main>
     </div>
-  )
+  );
 }
