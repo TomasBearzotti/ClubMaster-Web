@@ -1,5 +1,7 @@
 "use client";
 
+import type React from "react";
+
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -36,7 +38,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ArrowLeft, FileText, Trophy, Loader2, Edit } from "lucide-react";
+import {
+  ArrowLeft,
+  Upload,
+  FileSpreadsheet,
+  Trophy,
+  Loader2,
+  Download,
+  AlertCircle,
+} from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -45,39 +55,51 @@ interface Torneo {
   IdTorneo: number;
   Nombre: string;
   Disciplina: string;
+  FechaInicio: string;
   Estado: number;
+  Participantes: number;
+  Descripcion?: string;
+  MaxParticipantes?: number;
+  FechaFin?: string;
+  PremioGanador?: string;
 }
 
 interface Partido {
   IdPartido: number;
   TorneoId: number;
+  TorneoNombre: string;
   ParticipanteA: string;
   ParticipanteB: string;
-  FechaHora: string;
-  Estado: number; // 0: Programado, 1: En Curso, 2: Finalizado
-  ResultadoEquipo1: number | null;
-  ResultadoEquipo2: number | null;
-  Observaciones: string | null;
+  FechaHora?: string;
+  Fase: string;
+  Lugar: string;
+  Estado: number;
+  TieneEstadisticas: boolean;
 }
 
-export default function RegistrarResultadosPage() {
+interface PlantillaEstadistica {
+  NombreCampo: string;
+  TipoDato: string;
+  EsObligatorio: boolean;
+  Orden: number;
+}
+
+export default function CargarResultadosPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [torneos, setTorneos] = useState<Torneo[]>([]);
   const [partidos, setPartidos] = useState<Partido[]>([]);
   const [selectedTorneo, setSelectedTorneo] = useState<string>("");
+  const [selectedPartido, setSelectedPartido] = useState<Partido | null>(null);
+  const [selectedPartidoId, setSelectedPartidoId] = useState<number | null>(
+    null
+  );
+  const [plantilla, setPlantilla] = useState<PlantillaEstadistica[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingPartidos, setLoadingPartidos] = useState(false);
-  const [showResultDialog, setShowResultDialog] = useState(false);
-  const [selectedPartido, setSelectedPartido] = useState<Partido | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  // Form state for result
-  const [resultForm, setResultForm] = useState({
-    resultadoEquipo1: "",
-    resultadoEquipo2: "",
-    observaciones: "",
-  });
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   useEffect(() => {
     fetchTorneos();
@@ -111,7 +133,7 @@ export default function RegistrarResultadosPage() {
       console.error("Error fetching torneos:", error);
       toast({
         title: "Error",
-        description: "Ocurrió un error al cargar los torneos.",
+        description: "Ocurrio un error al cargar los torneos.",
         variant: "destructive",
       });
     } finally {
@@ -122,7 +144,9 @@ export default function RegistrarResultadosPage() {
   const fetchPartidos = async (torneoId: string) => {
     setLoadingPartidos(true);
     try {
-      const response = await fetch(`/api/partidos?torneoId=${torneoId}`);
+      const response = await fetch(
+        `/api/partidos?torneoId=${torneoId}&includeStats=true`
+      );
       if (response.ok) {
         const data = await response.json();
         setPartidos(data);
@@ -137,7 +161,7 @@ export default function RegistrarResultadosPage() {
       console.error("Error fetching partidos:", error);
       toast({
         title: "Error",
-        description: "Ocurrió un error al cargar los partidos.",
+        description: "Ocurrio un error al cargar los partidos.",
         variant: "destructive",
       });
     } finally {
@@ -145,88 +169,145 @@ export default function RegistrarResultadosPage() {
     }
   };
 
-  const handleOpenResultDialog = (partido: Partido) => {
-    setSelectedPartido(partido);
-    setResultForm({
-      resultadoEquipo1: partido.ResultadoEquipo1?.toString() || "",
-      resultadoEquipo2: partido.ResultadoEquipo2?.toString() || "",
-      observaciones: partido.Observaciones || "",
-    });
-    setShowResultDialog(true);
+  const fetchPlantilla = async (idPartido: number) => {
+    console.log("=== fetchPlantilla INICIO ===");
+    console.log("IdPartido recibido:", idPartido);
+
+    try {
+      const response = await fetch(
+        `/api/estadisticas/plantillas/download?IdPartido=${idPartido}`
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Error response:", errorText);
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+
+      a.href = url;
+
+      // Tomar nombre del archivo del header Content-Disposition
+      const contentDisposition = response.headers.get("Content-Disposition");
+      let filename = "plantilla.xlsx";
+
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?(.+?)"?$/);
+        if (match && match[1]) filename = match[1].replace(/_+$/, ""); // Quitamos guiones bajos finales
+      }
+
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      console.log("Descarga completada:", filename);
+    } catch (error) {
+      console.error("Error fetching plantilla:", error);
+    }
   };
 
-  const handleSaveResult = async () => {
-    if (!selectedPartido) return;
+  const handleOpenUploadDialog = (partido: Partido) => {
+    console.log("=== handleOpenUploadDialog ===");
+    console.log("Partido recibido:", partido);
 
-    if (!resultForm.resultadoEquipo1 || !resultForm.resultadoEquipo2) {
-      toast({
-        title: "Error",
-        description: "Ambos resultados son requeridos.",
-        variant: "destructive",
-      });
+    if (!partido?.IdPartido) {
+      console.error("IdPartido inválido:", partido);
       return;
     }
 
-    setSaving(true);
+    setSelectedPartidoId(partido.IdPartido); // Guardamos solo el Id
+    setShowUploadDialog(true); // Abrimos el diálogo
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
+        toast({
+          title: "Error",
+          description: "Solo se permiten archivos Excel (.xlsx, .xls)",
+          variant: "destructive",
+        });
+        return;
+      }
+      setSelectedFile(file);
+    }
+  };
+
+  const handleUploadFile = async () => {
+    if (!selectedFile || !selectedPartidoId) return; // usamos solo selectedPartidoId
+
+    setUploading(true);
     try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
       const response = await fetch(
-        `/api/partidos/${selectedPartido.IdPartido}/resultado`,
+        `/api/partidos/${selectedPartidoId}/resultado`,
         {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            resultadoEquipo1: Number.parseInt(resultForm.resultadoEquipo1),
-            resultadoEquipo2: Number.parseInt(resultForm.resultadoEquipo2),
-            observaciones: resultForm.observaciones,
-            estado: 2, // Finalizado
-          }),
+          method: "POST",
+          body: formData,
         }
       );
 
       if (response.ok) {
         toast({
           title: "Éxito",
-          description: "Resultado registrado exitosamente.",
+          description: "Estadísticas cargadas exitosamente.",
         });
-        setShowResultDialog(false);
-        fetchPartidos(selectedTorneo); // Refresh partidos
+        setShowUploadDialog(false);
+        setSelectedFile(null);
+        fetchPartidos(selectedTorneo); // Refrescar partidos
       } else {
         const error = await response.json();
         toast({
           title: "Error",
-          description: error.error || "Error al registrar el resultado.",
+          description: error.error || "Error al cargar las estadísticas.",
           variant: "destructive",
         });
       }
     } catch (error: any) {
-      console.error("Error saving result:", error);
+      console.error("Error uploading file:", error);
       toast({
         title: "Error",
-        description: "Ocurrió un error al registrar el resultado.",
+        description: "Ocurrió un error al cargar el archivo.",
         variant: "destructive",
       });
     } finally {
-      setSaving(false);
+      setUploading(false);
     }
+  };
+
+  const handleDownloadTemplate = async () => {
+    if (!selectedPartidoId) {
+      console.error("No hay partido seleccionado para descargar");
+      return;
+    }
+
+    await fetchPlantilla(selectedPartidoId);
   };
 
   const getEstadoPartidoBadge = (estado: number) => {
     switch (estado) {
-      case 0: // Programado
+      case 0:
         return (
           <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
             Programado
           </Badge>
         );
-      case 1: // En Curso
+      case 1:
         return (
           <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
             En Curso
           </Badge>
         );
-      case 2: // Finalizado
+      case 2:
         return (
           <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
             Finalizado
@@ -266,11 +347,11 @@ export default function RegistrarResultadosPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-            <FileText className="h-8 w-8 text-green-600" />
-            Registrar Resultados
+            <Upload className="h-8 w-8 text-green-600" />
+            Cargar Resultados
           </h2>
           <p className="text-gray-600">
-            Registra los resultados de los partidos de los torneos
+            Sube archivos Excel con las estadísticas de los partidos
           </p>
         </div>
 
@@ -279,7 +360,7 @@ export default function RegistrarResultadosPage() {
           <CardHeader>
             <CardTitle>Seleccionar Torneo</CardTitle>
             <CardDescription>
-              Elige el torneo para ver y registrar resultados de partidos
+              Elige el torneo para ver los partidos disponibles
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -314,8 +395,7 @@ export default function RegistrarResultadosPage() {
               {!loading && torneos.length === 0 && (
                 <Alert>
                   <AlertDescription>
-                    No hay torneos activos disponibles para registrar
-                    resultados.
+                    No hay torneos activos disponibles para cargar resultados.
                   </AlertDescription>
                 </Alert>
               )}
@@ -356,51 +436,67 @@ export default function RegistrarResultadosPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Equipo 1</TableHead>
-                      <TableHead>Equipo 2</TableHead>
+                      <TableHead>Participantes</TableHead>
                       <TableHead>Fecha/Hora</TableHead>
+                      <TableHead>Fase</TableHead>
                       <TableHead>Estado</TableHead>
-                      <TableHead>Resultado</TableHead>
+                      <TableHead>Estadísticas</TableHead>
                       <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {partidos.map((partido) => (
                       <TableRow key={partido.IdPartido}>
-                        <TableCell className="font-medium">
-                          {partido.ParticipanteA}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {partido.ParticipanteB}
+                        <TableCell>
+                          <div className="font-medium">
+                            {partido.ParticipanteA} vs {partido.ParticipanteB}
+                          </div>
                         </TableCell>
                         <TableCell>
-                          {format(
-                            new Date(partido.FechaHora),
-                            "dd/MM/yyyy HH:mm"
+                          {partido.FechaHora ? (
+                            <div>
+                              <div>
+                                {format(
+                                  new Date(partido.FechaHora),
+                                  "dd/MM/yyyy"
+                                )}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {format(new Date(partido.FechaHora), "HH:mm")}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">Próximamente</span>
                           )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{partido.Fase}</Badge>
                         </TableCell>
                         <TableCell>
                           {getEstadoPartidoBadge(partido.Estado)}
                         </TableCell>
                         <TableCell>
-                          {partido.Estado === 2 ? (
-                            <span className="font-medium">
-                              {partido.ResultadoEquipo1} -{" "}
-                              {partido.ResultadoEquipo2}
-                            </span>
+                          {partido.TieneEstadisticas ? (
+                            <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                              Cargadas
+                            </Badge>
                           ) : (
-                            <span className="text-gray-400">Sin resultado</span>
+                            <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">
+                              Pendientes
+                            </Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleOpenResultDialog(partido)}
+                            onClick={() => handleOpenUploadDialog(partido)}
                             className="flex items-center gap-1"
                           >
-                            <Edit className="h-4 w-4" />
-                            {partido.Estado === 2 ? "Ver/Editar" : "Registrar"}
+                            <Upload className="h-4 w-4" />
+                            {partido.TieneEstadisticas
+                              ? "Actualizar"
+                              : "Cargar"}
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -412,98 +508,137 @@ export default function RegistrarResultadosPage() {
           </Card>
         )}
 
-        {/* Dialog para registrar resultado */}
-        <Dialog open={showResultDialog} onOpenChange={setShowResultDialog}>
-          <DialogContent className="sm:max-w-[500px]">
+        {/* Dialog para cargar archivo */}
+        <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
+          <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
-              <DialogTitle>
-                {selectedPartido?.Estado === 2
-                  ? "Ver/Editar Resultado"
-                  : "Registrar Resultado"}
-              </DialogTitle>
+              <DialogTitle>Cargar Estadísticas del Partido</DialogTitle>
               <DialogDescription>
                 {selectedPartido && (
                   <>
                     {selectedPartido.ParticipanteA} vs{" "}
                     {selectedPartido.ParticipanteB}
                     <br />
-                    {format(
-                      new Date(selectedPartido.FechaHora),
-                      "dd/MM/yyyy 'a las' HH:mm"
-                    )}
+                    {selectedPartido.FechaHora &&
+                      format(
+                        new Date(selectedPartido.FechaHora),
+                        "dd/MM/yyyy 'a las' HH:mm"
+                      )}
                   </>
                 )}
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="resultado1">
-                    {selectedPartido?.ParticipanteA}
-                  </Label>
-                  <Input
-                    id="resultado1"
-                    type="number"
-                    min="0"
-                    value={resultForm.resultadoEquipo1}
-                    onChange={(e) =>
-                      setResultForm({
-                        ...resultForm,
-                        resultadoEquipo1: e.target.value,
-                      })
-                    }
-                    placeholder="0"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="resultado2">
-                    {selectedPartido?.ParticipanteB}
-                  </Label>
-                  <Input
-                    id="resultado2"
-                    type="number"
-                    min="0"
-                    value={resultForm.resultadoEquipo2}
-                    onChange={(e) =>
-                      setResultForm({
-                        ...resultForm,
-                        resultadoEquipo2: e.target.value,
-                      })
-                    }
-                    placeholder="0"
-                  />
-                </div>
+
+            <div className="space-y-6">
+              {/* Información de la plantilla */}
+              {plantilla.length > 0 && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <div className="space-y-2">
+                      <p className="font-medium">
+                        Campos requeridos en el Excel:
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        {plantilla.map((campo) => (
+                          <div
+                            key={campo.NombreCampo}
+                            className="flex items-center gap-2"
+                          >
+                            <span
+                              className={
+                                campo.EsObligatorio
+                                  ? "text-red-600"
+                                  : "text-gray-600"
+                              }
+                            >
+                              {campo.NombreCampo}
+                            </span>
+                            {campo.EsObligatorio && (
+                              <span className="text-red-500">*</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Botón para descargar plantilla */}
+              <div className="flex justify-center">
+                <Button
+                  variant="outline"
+                  onClick={handleDownloadTemplate}
+                  className="flex items-center gap-2 bg-transparent"
+                >
+                  <Download className="h-4 w-4" />
+                  Descargar Plantilla Excel
+                </Button>
               </div>
+
+              {/* Selector de archivo */}
               <div className="grid gap-2">
-                <Label htmlFor="observaciones">Observaciones (Opcional)</Label>
+                <Label htmlFor="file">Archivo Excel</Label>
                 <Input
-                  id="observaciones"
-                  value={resultForm.observaciones}
-                  onChange={(e) =>
-                    setResultForm({
-                      ...resultForm,
-                      observaciones: e.target.value,
-                    })
-                  }
-                  placeholder="Ej: Partido suspendido por lluvia, gol en tiempo extra, etc."
+                  id="file"
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleFileChange}
                 />
+                {selectedFile && (
+                  <p className="text-sm text-gray-600">
+                    Archivo seleccionado: {selectedFile.name}
+                  </p>
+                )}
               </div>
+
+              {/* Instrucciones */}
+              <Alert>
+                <FileSpreadsheet className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="space-y-1">
+                    <p className="font-medium">Instrucciones:</p>
+                    <ul className="text-sm space-y-1 ml-4 list-disc">
+                      <li>
+                        Descarga la plantilla Excel específica para este deporte
+                      </li>
+                      <li>
+                        Completa los datos de cada participante en las columnas
+                        correspondientes
+                      </li>
+                      <li>Los campos marcados con * son obligatorios</li>
+                      <li>
+                        Sube el archivo completado para procesar las
+                        estadísticas
+                      </li>
+                    </ul>
+                  </div>
+                </AlertDescription>
+              </Alert>
             </div>
+
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => setShowResultDialog(false)}
+                onClick={() => setShowUploadDialog(false)}
               >
                 Cancelar
               </Button>
-              <Button onClick={handleSaveResult} disabled={saving}>
-                {saving ? (
+              <Button
+                onClick={handleUploadFile}
+                disabled={!selectedFile || uploading}
+              >
+                {uploading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Guardando...
+                    Procesando...
                   </>
                 ) : (
-                  "Guardar Resultado"
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Cargar Estadísticas
+                  </>
                 )}
               </Button>
             </DialogFooter>

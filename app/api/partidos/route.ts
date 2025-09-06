@@ -5,76 +5,90 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const torneoId = searchParams.get("torneoId")
+    const includeStats = searchParams.get("includeStats") === "true"
 
     const pool = await getConnection()
 
     let query = `
-      SELECT 
-        p.IdPartido,
-        p.TorneoId,
-        p.FechaPartido,
-        p.HoraPartido,
-        p.Fase,
-        p.Grupo,
-        p.Lugar,
-        p.Estado,
-        p.EstadoPartido,
-        p.ArbitroId,
-        CASE 
-          WHEN part1.EsEquipo = 1 THEN e1.Nombre
-          ELSE part1.Nombre
-        END as EquipoA,
-        CASE 
-          WHEN part2.EsEquipo = 1 THEN e2.Nombre
-          ELSE part2.Nombre
-        END as EquipoB,
-        a.Nombre as ArbitroNombre,
-        t.Nombre as TorneoNombre,
-        t.FechaInicio,
-        t.FechaFin
-      FROM Partidos p
-      INNER JOIN Torneos t ON p.TorneoId = t.IdTorneo
-      LEFT JOIN Participantes part1 ON p.ParticipanteAId = part1.IdParticipante
-      LEFT JOIN Participantes part2 ON p.ParticipanteBId = part2.IdParticipante
-      LEFT JOIN Equipos e1 ON part1.EquipoId = e1.IdEquipo
-      LEFT JOIN Equipos e2 ON part2.EquipoId = e2.IdEquipo
-      LEFT JOIN Arbitros a ON p.ArbitroId = a.IdArbitro
-    `
-
-    const request_builder = pool.request()
+  SELECT 
+    p.IdPartido,
+    p.TorneoId,
+    t.Nombre as TorneoNombre,
+    pa.Nombre as ParticipanteA,
+    pb.Nombre as ParticipanteB,
+    p.FechaHora,
+    p.Fase,
+    p.Lugar,
+    p.Estado
+    ${
+      includeStats
+        ? `, 
+    CASE 
+      WHEN EXISTS (SELECT 1 FROM EstadisticasPartido ep WHERE ep.PartidoId = p.IdPartido) 
+      THEN 1 
+      ELSE 0 
+    END as TieneEstadisticas`
+        : ""
+    }
+  FROM Partidos p
+  INNER JOIN Torneos t ON p.TorneoId = t.IdTorneo
+  INNER JOIN Participantes pa ON p.ParticipanteAId = pa.IdParticipante
+  LEFT JOIN Participantes pb ON p.ParticipanteBId = pb.IdParticipante
+`
 
     if (torneoId) {
-      query += " WHERE p.TorneoId = @torneoId"
-      request_builder.input("torneoId", sql.Int, Number.parseInt(torneoId))
+      query += ` WHERE p.TorneoId = @torneoId`
     }
 
-    query += " ORDER BY p.FechaPartido ASC, p.HoraPartido ASC, p.Fase ASC"
+    query += ` ORDER BY p.FechaHora DESC, p.IdPartido DESC`
 
-    const result = await request_builder.query(query)
+    const request_query = pool.request()
 
-    // Formatear la respuesta
-    const partidos = result.recordset.map((partido) => ({
-      IdPartido: partido.IdPartido,
-      IdTorneo: partido.TorneoId,
-      FechaHora:
-        partido.FechaPartido && partido.HoraPartido
-          ? `${partido.FechaPartido.toISOString().split("T")[0]}T${partido.HoraPartido}`
-          : null,
-      ParticipanteA: partido.EquipoA || "TBD",
-      ParticipanteB: partido.EquipoB || "TBD",
-      Fase: partido.Fase || "Fase de Grupos",
-      Grupo: partido.Grupo,
-      Lugar: partido.Lugar || "Por definir",
-      Estado: partido.Estado || 0,
-      ArbitroNombre: partido.ArbitroNombre,
-      TorneoNombre: partido.TorneoNombre,
-      FechaInicio: partido.FechaInicio?.toISOString(),
-      FechaFin: partido.FechaFin?.toISOString(),
-    }))
+    if (torneoId) {
+      request_query.input("torneoId", sql.Int, Number.parseInt(torneoId))
+    }
 
-    return NextResponse.json(partidos)
-  } catch (error: any) {
-    console.error("Error obteniendo partidos:", error)
+    const result = await request_query.query(query)
+
+    return NextResponse.json(result.recordset)
+  } catch (error) {
+    console.error("Error fetching partidos:", error)
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const { torneoId, participanteAId, participanteBId, fechaHora, fase, lugar, arbitroId } = await request.json()
+
+    if (!torneoId || !participanteAId || !fase || !lugar) {
+      return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 })
+    }
+
+    const pool = await getConnection()
+
+    const result = await pool
+      .request()
+      .input("torneoId", sql.Int, torneoId)
+      .input("participanteAId", sql.Int, participanteAId)
+      .input("participanteBId", sql.Int, participanteBId || null)
+      .input("fechaHora", sql.DateTime, fechaHora ? new Date(fechaHora) : null)
+      .input("fase", sql.NVarChar, fase)
+      .input("lugar", sql.NVarChar, lugar)
+      .input("arbitroId", sql.Int, arbitroId || null)
+      .query(`
+        INSERT INTO Partidos (TorneoId, ParticipanteAId, ParticipanteBId, FechaHora, Fase, Lugar, Estado, ArbitroId)
+        OUTPUT INSERTED.IdPartido
+        VALUES (@torneoId, @participanteAId, @participanteBId, @fechaHora, @fase, @lugar, 0, @arbitroId)
+      `)
+
+    return NextResponse.json({
+      success: true,
+      partidoId: result.recordset[0].IdPartido,
+      message: "Partido creado exitosamente",
+    })
+  } catch (error) {
+    console.error("Error creating partido:", error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
