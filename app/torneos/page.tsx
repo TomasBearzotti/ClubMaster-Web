@@ -160,7 +160,13 @@ export default function GestionTorneosPage() {
     new Set()
   );
 
-  // Form state for new tournament
+  const [filtros, setFiltros] = useState({
+    busqueda: "",
+    estado: "all",
+    deporte: "all",
+    tipoParticipacion: "all",
+  });
+
   const [formData, setFormData] = useState({
     nombre: "",
     disciplina: "",
@@ -399,6 +405,13 @@ export default function GestionTorneosPage() {
     }
   };
 
+  const getTipoParticipacion = (disciplina: string) => {
+    // Ejemplo: fútbol, voley → equipos; ajedrez → socio
+    const deportesEquipo = ["Fútbol", "Voley", "Básquet"];
+    if (deportesEquipo.includes(disciplina)) return "equipo";
+    return "socio";
+  };
+
   const getEstadoBadge = (estado: number) => {
     switch (estado) {
       case 0:
@@ -454,11 +467,56 @@ export default function GestionTorneosPage() {
     router.push(`/partidos/${partidoId}`);
   };
 
-  const filteredTorneos = torneos.filter(
-    (torneo) =>
-      torneo.Nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      torneo.Disciplina.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredTorneos = torneos
+    .filter((torneo) => {
+      // Filtro de búsqueda
+      if (filtros.busqueda) {
+        const busquedaLower = filtros.busqueda.toLowerCase();
+        const nombreMatch =
+          torneo.Nombre?.toLowerCase().includes(busquedaLower) || false;
+        const deporteMatch =
+          torneo.Disciplina?.toLowerCase().includes(busquedaLower) || false;
+        if (!nombreMatch && !deporteMatch) {
+          return false;
+        }
+      }
+
+      // Filtro por estado
+      if (
+        filtros.estado &&
+        filtros.estado !== "all" &&
+        torneo.Estado.toString() !== filtros.estado
+      ) {
+        return false;
+      }
+
+      // Filtro por deporte
+      if (
+        filtros.deporte &&
+        filtros.deporte !== "all" &&
+        torneo.Disciplina !== filtros.deporte
+      ) {
+        return false;
+      }
+
+      // Filtro por tipo de participación
+      if (filtros.tipoParticipacion && filtros.tipoParticipacion !== "all") {
+        const tipoTorneo = getTipoParticipacion(torneo.Disciplina);
+        if (
+          filtros.tipoParticipacion !== "all" &&
+          tipoTorneo !== filtros.tipoParticipacion
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    })
+    // 🔎 Ordenar torneos: Activos → Pendientes → Finalizados → Cancelados
+    .sort((a, b) => {
+      const orden: Record<number, number> = { 1: 0, 0: 1, 2: 2, 3: 3 };
+      return (orden[a.Estado] ?? 0) - (orden[b.Estado] ?? 0);
+    });
 
   // Calculate statistics
   const totalTorneos = torneos.length;
@@ -1040,7 +1098,8 @@ export default function GestionTorneosPage() {
                                                         >
                                                           <User className="h-4 w-4 text-green-600" />
                                                           <span>
-                                                            {i.Nombre}
+                                                            {i.Nombre}{" "}
+                                                            {i.Apellido}
                                                           </span>
                                                         </div>
                                                       ))

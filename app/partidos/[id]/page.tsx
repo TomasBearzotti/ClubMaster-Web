@@ -47,7 +47,13 @@ import {
   Pie,
   LineChart,
   Line,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
 } from "recharts";
+import React from "react";
 
 interface PartidoDetalle {
   IdPartido: number;
@@ -140,7 +146,7 @@ export default function PartidoDetallePage() {
           });
 
           // Actualizar en el estado local
-          setPartido((prev) =>
+          +setPartido((prev) =>
             prev ? { ...prev, EstadoPartido: "finalizado" } : prev
           );
         }
@@ -266,6 +272,72 @@ export default function PartidoDetallePage() {
     router.back();
   };
 
+  const normalize = (s: string) => (s ?? "").toString().trim().toLowerCase();
+
+  // Orden de preferencia de campos de resultado para distintos deportes
+  const SCORE_FIELDS = ["sets ganados", "goles", "puntos", "score", "tantos"];
+
+  const getScoreFromStats = (participantName: string) => {
+    const target = normalize(participantName);
+
+    // 1) Buscar por campos preferidos (uno por participante)
+    for (const field of SCORE_FIELDS) {
+      const row = estadisticas.find(
+        (s) =>
+          normalize(s.ParticipanteNombre) === target &&
+          normalize(s.NombreCampo).includes(field)
+      );
+      if (row && !Number.isNaN(parseFloat(row.Valor))) {
+        return parseFloat(row.Valor);
+      }
+    }
+
+    // 2) Fallback ultra-cauto: si NO hay ningún campo preferido,
+    // y sólo hay UN campo numérico para ese participante, usarlo.
+    const numericRows = estadisticas.filter(
+      (s) =>
+        normalize(s.ParticipanteNombre) === target &&
+        !Number.isNaN(parseFloat(s.Valor))
+    );
+    if (numericRows.length === 1) {
+      return parseFloat(numericRows[0].Valor);
+    }
+
+    // Si no hay forma confiable, no mostrar marcador.
+    return undefined;
+  };
+
+  // Agrupar estadísticas: un campo con valores de A y B
+  const estadisticasAgrupadas = React.useMemo(() => {
+    if (!partido?.ParticipanteA || !partido?.ParticipanteB) return [];
+
+    const result: { nombre: string; valorA: any; valorB: any }[] = [];
+
+    const camposUnicos = Array.from(
+      new Set(estadisticas.map((s) => s.NombreCampo))
+    );
+
+    for (const campo of camposUnicos) {
+      const valorA =
+        estadisticas.find(
+          (s) =>
+            s.NombreCampo === campo &&
+            s.ParticipanteNombre === partido.ParticipanteA
+        )?.Valor || 0;
+
+      const valorB =
+        estadisticas.find(
+          (s) =>
+            s.NombreCampo === campo &&
+            s.ParticipanteNombre === partido.ParticipanteB
+        )?.Valor || 0;
+
+      result.push({ nombre: campo, valorA, valorB });
+    }
+
+    return result;
+  }, [estadisticas, partido]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 flex items-center justify-center">
@@ -372,33 +444,60 @@ export default function PartidoDetallePage() {
               </CardHeader>
               <CardContent>
                 {/* Resultado */}
-                {estadisticas.length > 0 ? (
-                  <div className="text-center mb-6">
-                    <div className="text-4xl font-bold text-blue-600 mb-2">
-                      {estadisticas.find(
-                        (s) =>
-                          s.ParticipanteNombre === partido.ParticipanteA &&
-                          s.NombreCampo.includes("Sets Ganados")
-                      )?.Valor || 0}
-                      {" - "}
-                      {estadisticas.find(
-                        (s) =>
-                          s.ParticipanteNombre === partido.ParticipanteB &&
-                          s.NombreCampo.includes("Sets Ganados")
-                      )?.Valor || 0}
-                    </div>
-                    <p className="text-gray-600">Resultado Final</p>
-                  </div>
-                ) : partido.ResultadoEquipoA !== undefined &&
-                  partido.ResultadoEquipoB !== undefined ? (
-                  <div className="text-center mb-6">
-                    <div className="text-4xl font-bold text-blue-600 mb-2">
-                      {partido.ResultadoEquipoA} - {partido.ResultadoEquipoB}
-                    </div>
-                    <p className="text-gray-600">Resultado Final</p>
-                  </div>
-                ) : null}
+                {(() => {
+                  const normalize = (s: string) =>
+                    (s ?? "").toString().trim().toLowerCase();
+                  const SCORE_FIELDS = [
+                    "sets ganados",
+                    "goles",
+                    "puntos",
+                    "score",
+                    "tantos",
+                  ];
 
+                  const getScoreFromStats = (participantName: string) => {
+                    const target = normalize(participantName);
+
+                    // Buscar primero en campos conocidos
+                    for (const field of SCORE_FIELDS) {
+                      const row = estadisticas.find(
+                        (s) =>
+                          normalize(s.ParticipanteNombre) === target &&
+                          normalize(s.NombreCampo).includes(field)
+                      );
+                      if (row && !Number.isNaN(parseFloat(row.Valor))) {
+                        return parseFloat(row.Valor);
+                      }
+                    }
+
+                    // Fallback: si no hay campo conocido, pero hay un solo numérico, usarlo
+                    const numericRows = estadisticas.filter(
+                      (s) =>
+                        normalize(s.ParticipanteNombre) === target &&
+                        !Number.isNaN(parseFloat(s.Valor))
+                    );
+                    if (numericRows.length === 1) {
+                      return parseFloat(numericRows[0].Valor);
+                    }
+
+                    return undefined;
+                  };
+
+                  const a = getScoreFromStats(partido.ParticipanteA);
+                  const b = getScoreFromStats(partido.ParticipanteB);
+
+                  if (typeof a === "number" && typeof b === "number") {
+                    return (
+                      <div className="text-center mb-6">
+                        <div className="text-4xl font-bold text-blue-600 mb-2">
+                          {a} - {b}
+                        </div>
+                        <p className="text-gray-600">Resultado Final</p>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
                 {/* Información del Partido */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="text-center">
@@ -482,44 +581,39 @@ export default function PartidoDetallePage() {
                     </p>
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Participante</TableHead>
-                        <TableHead>Campo</TableHead>
-                        <TableHead>Valor</TableHead>
-                        <TableHead>Fecha Registro</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {estadisticas.map((stat) => (
-                        <TableRow key={stat.IdEstadistica}>
-                          <TableCell className="font-medium">
-                            {stat.ParticipanteNombre}
-                          </TableCell>
-                          <TableCell>{stat.NombreCampo}</TableCell>
-                          <TableCell className="font-semibold">
-                            {stat.Valor}
-                          </TableCell>
-                          <TableCell>
-                            {format(
-                              new Date(stat.FechaRegistro),
-                              "dd/MM/yyyy HH:mm"
-                            )}
-                          </TableCell>
-                        </TableRow>
+                  <div className="w-full max-w-2xl mx-auto">
+                    {/* Encabezados de participantes */}
+                    <div className="grid grid-cols-3 text-center mb-4 font-semibold text-gray-800">
+                      <div>{partido.ParticipanteA}</div>
+                      <div></div>
+                      <div>{partido.ParticipanteB}</div>
+                    </div>
+
+                    {/* Stats lado a lado */}
+                    <div className="grid grid-cols-3 gap-y-4 text-center">
+                      {estadisticasAgrupadas.map((stat) => (
+                        <React.Fragment key={stat.nombre}>
+                          <div className="text-lg font-bold text-blue-600">
+                            {stat.valorA}
+                          </div>
+                          <div className="text-sm text-gray-700">
+                            {stat.nombre}
+                          </div>
+                          <div className="text-lg font-bold text-red-600">
+                            {stat.valorB}
+                          </div>
+                        </React.Fragment>
                       ))}
-                    </TableBody>
-                  </Table>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
-
           {/* Gráficos */}
           <TabsContent value="graficos">
             <div className="space-y-6">
-              {estadisticas.length === 0 ? (
+              {estadisticasAgrupadas.length === 0 ? (
                 <Card>
                   <CardContent className="text-center py-12">
                     <PieChart className="h-16 w-16 text-gray-400 mx-auto mb-4" />
@@ -533,120 +627,126 @@ export default function PartidoDetallePage() {
                 </Card>
               ) : (
                 <>
-                  {/* Gráfico de Barras Comparativo */}
-                  {chartData.length > 0 && numericFields.length > 0 && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>
-                          Comparación de Estadísticas - {partido.Disciplina}
-                        </CardTitle>
-                        <CardDescription>
-                          Comparación entre participantes
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <ResponsiveContainer width="100%" height={400}>
-                          <BarChart data={chartData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="participante" />
-                            <YAxis />
-                            <Tooltip />
-                            <Legend />
-                            {numericFields.slice(0, 6).map((campo, index) => (
-                              <Bar
-                                key={campo}
-                                dataKey={campo}
-                                fill={COLORS[index % COLORS.length]}
-                                name={campo}
-                              />
-                            ))}
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </CardContent>
-                    </Card>
-                  )}
+                  {/* 1) Pie Charts para porcentaje */}
+                  {estadisticasAgrupadas
+                    .filter((s) =>
+                      /porcentaje|%|accuracy/i.test(s.nombre.toLowerCase())
+                    )
+                    .map((s) => {
+                      const pieData = [
+                        {
+                          name: partido.ParticipanteA,
+                          value: parseFloat(String(s.valorA)) || 0,
+                        },
+                        {
+                          name: partido.ParticipanteB,
+                          value: parseFloat(String(s.valorB)) || 0,
+                        },
+                      ];
+                      return (
+                        <Card key={s.nombre}>
+                          <CardHeader>
+                            <CardTitle>{s.nombre}</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <ResponsiveContainer width="100%" height={250}>
+                              <RechartsPieChart>
+                                <Pie
+                                  data={pieData}
+                                  cx="50%"
+                                  cy="50%"
+                                  outerRadius={80}
+                                  label
+                                  dataKey={""}
+                                >
+                                  {pieData.map((_, i) => (
+                                    <Cell
+                                      key={i}
+                                      fill={i === 0 ? "#2563eb" : "#dc2626"}
+                                    />
+                                  ))}
+                                </Pie>
+                                <Tooltip />
+                                <Legend />
+                              </RechartsPieChart>
+                            </ResponsiveContainer>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
 
-                  {/* Gráficos Circulares por Campo */}
-                  {numericFields.slice(0, 4).map((campo) => {
-                    const pieData = preparePieData(campo);
-                    if (pieData.length === 0) return null;
+                  {/* 2) BarChart horizontal enfrentado */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Comparación directa</CardTitle>
+                      <CardDescription>
+                        {partido.ParticipanteA} vs {partido.ParticipanteB}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={400}>
+                        <BarChart
+                          layout="vertical"
+                          data={estadisticasAgrupadas}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis type="number" />
+                          <YAxis type="category" dataKey="nombre" />
+                          <Tooltip />
+                          <Legend />
+                          <Bar
+                            dataKey="valorA"
+                            name={partido.ParticipanteA}
+                            fill="#2563eb"
+                            barSize={15}
+                          />
+                          <Bar
+                            dataKey="valorB"
+                            name={partido.ParticipanteB}
+                            fill="#dc2626"
+                            barSize={15}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
 
-                    return (
-                      <Card key={campo}>
-                        <CardHeader>
-                          <CardTitle>Distribución - {campo}</CardTitle>
-                          <CardDescription>
-                            Distribución por participante
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <ResponsiveContainer width="100%" height={300}>
-                            <RechartsPieChart>
-                              <Pie
-                                data={pieData}
-                                cx="50%"
-                                cy="50%"
-                                labelLine={false}
-                                label={({ name, value }) => `${name}: ${value}`}
-                                outerRadius={80}
-                                fill="#8884d8"
-                                dataKey="value"
-                              >
-                                {pieData.map((entry, index) => (
-                                  <Cell
-                                    key={`cell-${index}`}
-                                    fill={COLORS[index % COLORS.length]}
-                                  />
-                                ))}
-                              </Pie>
-                              <Tooltip />
-                            </RechartsPieChart>
-                          </ResponsiveContainer>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-
-                  {/* Gráfico de líneas para deportes como Tenis/Pádel */}
-                  {(partido.Disciplina?.toLowerCase().includes("tenis") ||
-                    partido.Disciplina?.toLowerCase().includes("padel")) &&
-                    numericFields.includes("Sets") && (
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Evolución por Sets</CardTitle>
-                          <CardDescription>
-                            Progresión del partido por sets
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <ResponsiveContainer width="100%" height={300}>
-                            <LineChart data={chartData}>
-                              <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis dataKey="participante" />
-                              <YAxis />
-                              <Tooltip />
-                              <Legend />
-                              <Line
-                                type="monotone"
-                                dataKey="Sets"
-                                stroke="#8884d8"
-                                strokeWidth={2}
-                                name="Sets Ganados"
-                              />
-                              {numericFields.includes("Games") && (
-                                <Line
-                                  type="monotone"
-                                  dataKey="Games"
-                                  stroke="#82ca9d"
-                                  strokeWidth={2}
-                                  name="Games Ganados"
-                                />
-                              )}
-                            </LineChart>
-                          </ResponsiveContainer>
-                        </CardContent>
-                      </Card>
-                    )}
+                  {/* 3) Radar Chart resumen global */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Resumen Global</CardTitle>
+                      <CardDescription>
+                        Comparación multivariable
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={400}>
+                        <RadarChart
+                          outerRadius={150}
+                          data={estadisticasAgrupadas}
+                        >
+                          <PolarGrid />
+                          <PolarAngleAxis dataKey="nombre" />
+                          <PolarRadiusAxis />
+                          <Radar
+                            name={partido.ParticipanteA}
+                            dataKey="valorA"
+                            stroke="#2563eb"
+                            fill="#2563eb"
+                            fillOpacity={0.6}
+                          />
+                          <Radar
+                            name={partido.ParticipanteB}
+                            dataKey="valorB"
+                            stroke="#dc2626"
+                            fill="#dc2626"
+                            fillOpacity={0.6}
+                          />
+                          <Legend />
+                        </RadarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
                 </>
               )}
             </div>

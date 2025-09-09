@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getConnection } from "@/lib/sql-server";
+import { getConnection, sql } from "@/lib/sql-server";
 import bcrypt from "bcryptjs";
 
 export async function POST(request: NextRequest) {
@@ -15,15 +15,19 @@ export async function POST(request: NextRequest) {
 
     const pool = await getConnection();
 
-    const result = await pool.request().input("email", email.trim()).query(`
+    const result = await pool
+      .request()
+      .input("email", sql.NVarChar, email.trim()).query(`
         SELECT 
-          IdUsuario,
-          Email,
-          ContrasenaHash,
-          IdPersona,
-          IdRol
-        FROM Usuarios
-        WHERE Email = @email
+          u.IdUsuario,
+          u.Email,
+          u.ContrasenaHash,
+          u.IdPersona,
+          u.IdRol,
+          r.Nombre AS RolNombre
+        FROM Usuarios u
+        INNER JOIN Roles r ON u.IdRol = r.IdRol
+        WHERE u.Email = @email
       `);
 
     if (result.recordset.length === 0) {
@@ -43,12 +47,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Guardar datos mínimos del usuario para cache posterior
+    // Datos limpios para guardar en localStorage
     const userData = {
       idUsuario: user.IdUsuario,
       email: user.Email,
       idPersona: user.IdPersona,
       idRol: user.IdRol,
+      rolNombre: user.RolNombre,
     };
 
     return NextResponse.json({

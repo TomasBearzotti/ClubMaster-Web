@@ -1,118 +1,91 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getConnection, sql } from "@/lib/sql-server";
+import * as XLSX from "xlsx";
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File;
-    const IdPartido = formData.get("IdPartido") as string;
-    const IdDeporte = formData.get("IdDeporte") as string;
+    const partidoId = formData.get("partidoId");
 
-    if (!file || !IdPartido || !IdDeporte) {
+    if (!file || !partidoId) {
       return NextResponse.json(
-        { error: "Archivo, IdPartido y IdDeporte son requeridos" },
+        { error: "Se requiere un archivo Excel y el partidoId" },
         { status: 400 }
       );
     }
 
-    // Validar que el archivo sea Excel
-    if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // 🔎 Leer Excel
+    const workbook = XLSX.read(buffer, { type: "buffer" });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+
+    // Convertir a JSON (una fila = participante)
+    const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+    if (rows.length === 0) {
       return NextResponse.json(
-        { error: "El archivo debe ser un Excel (.xlsx o .xls)" },
+        { error: "El archivo Excel está vacío" },
         { status: 400 }
       );
     }
 
     const pool = await getConnection();
 
-    // Verificar que el partido existe y corresponde al deporte
-    // CORREGIDO: nombre del parámetro en WHERE
-    const partidoResult = await pool
-      .request()
-      .input("IdPartido", sql.Int, Number.parseInt(IdPartido)).query(`
-        SELECT 
-          p.IdPartido,
-          t.Disciplina,
-          t.Nombre as TorneoNombre
-        FROM Partidos p
-        INNER JOIN Torneos t ON p.TorneoId = t.IdTorneo
-        WHERE p.IdPartido = @IdPartido
-      `);
+    // Insertar estadísticas
+    for (const row of rows) {
+      const participanteNombre = row["Participante"];
 
-    if (partidoResult.recordset.length === 0) {
-      return NextResponse.json(
-        { error: "Partido no encontrado" },
-        { status: 404 }
-      );
-    }
+      if (!participanteNombre) continue;
 
-    const partido = partidoResult.recordset[0];
+      // Buscar ParticipanteId según nombre (equipo o socio)
+      const participanteResult = await pool
+        .request()
+        .input("nombre", sql.NVarChar, participanteNombre).query(`
+          SELECT TOP 1 p.IdParticipante
+          FROM Participantes p
+          LEFT JOIN Equipos e ON p.EquipoId = e.IdEquipo
+          LEFT JOIN Socios s ON p.SocioId = s.IdSocio
+          LEFT JOIN Personas per ON s.IdPersona = per.IdPersona
+          WHERE e.Nombre = @nombre OR CONCAT(per.Nombre, ' ', per.Apellido) = @nombre
+        `);
 
-    // Aquí normalmente procesarías el archivo Excel
-    // Por ahora simularemos la importación
-    const estadisticasSimuladas = [
-      { participante: "Equipo A", campo: "Goles", valor: "2" },
-      { participante: "Equipo A", campo: "Asistencias", valor: "1" },
-      { participante: "Equipo B", campo: "Goles", valor: "1" },
-      { participante: "Equipo B", campo: "Asistencias", valor: "2" },
-    ];
-
-    // Obtener participantes del partido
-    const participantesResult = await pool
-      .request()
-      .input("IdPartido", sql.Int, Number.parseInt(IdPartido)).query(`
-        SELECT DISTINCT p.IdParticipante, p.Nombre
-        FROM Participantes p
-        INNER JOIN Partidos pt ON (p.IdParticipante = pt.ParticipanteAId OR p.IdParticipante = pt.ParticipanteBId)
-        WHERE pt.IdPartido = @IdPartido
-      `);
-
-    const participantes = participantesResult.recordset;
-
-    // Insertar estadísticas simuladas
-    const transaction = pool.transaction();
-    await transaction.begin();
-
-    try {
-      let estadisticasInsertadas = 0;
-
-      for (const estadistica of estadisticasSimuladas) {
-        const participante = participantes.find((p) =>
-          p.Nombre.includes(estadistica.participante)
-        );
-
-        if (participante) {
-          // CORREGIDO: usar PartidoId si es así como está en tu BD
-          await transaction
-            .request()
-            .input("IdPartido", sql.Int, Number.parseInt(IdPartido))
-            .input("participanteId", sql.Int, participante.IdParticipante)
-            .input("nombreCampo", sql.NVarChar, estadistica.campo)
-            .input("valor", sql.NVarChar, estadistica.valor).query(`
-              INSERT INTO EstadisticasPartido (PartidoId, ParticipanteId, NombreCampo, Valor)
-              VALUES (@IdPartido, @participanteId, @nombreCampo, @valor)
-            `);
-
-          estadisticasInsertadas++;
-        }
+      if (participanteResult.recordset.length === 0) {
+        console.warn(`Participante no encontrado: ${participanteNombre}`);
+        continue;
       }
 
-      await transaction.commit();
+      const participanteId = participanteResult.recordset[0].IdParticipante;
 
-      return NextResponse.json({
-        success: true,
-        message: `${estadisticasInsertadas} estadísticas importadas correctamente`,
-        partido: partido.TorneoNombre,
-        estadisticasInsertadas,
-      });
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
+      // Insertar todas las columnas de la fila (excepto "Participante")
+      for (const [campo, valor] of Object.entries(row)) {
+        if (campo === "Participante") continue;
+
+        if (valor !== null && valor !== "") {
+          await pool
+            .request()
+            .input("partidoId", sql.Int, Number(partidoId))
+            .input("participanteId", sql.Int, participanteId)
+            .input("nombreCampo", sql.NVarChar, campo)
+            .input("valor", sql.NVarChar, String(valor)).query(`
+              INSERT INTO EstadisticasPartido (PartidoId, ParticipanteId, NombreCampo, Valor, FechaRegistro)
+              VALUES (@partidoId, @participanteId, @nombreCampo, @valor, SYSDATETIME())
+            `);
+        }
+      }
     }
+
+    return NextResponse.json({
+      success: true,
+      message: "Estadísticas importadas correctamente",
+    });
   } catch (error) {
-    console.error("Error importing statistics:", error);
+    console.error("Error importando estadísticas:", error);
     return NextResponse.json(
-      { error: "Error al importar estadísticas" },
+      { error: "Error interno del servidor al importar estadísticas" },
       { status: 500 }
     );
   }

@@ -13,16 +13,22 @@ export async function GET(
   const result = await pool.request().input("IdPartido", sql.Int, partidoId)
     .query(`
       SELECT 
-        ep.IdEstadistica,
-        ep.ParticipanteId,
-        p.Nombre as ParticipanteNombre,
-        ep.NombreCampo,
-        ep.Valor,
-        ep.FechaRegistro
-      FROM EstadisticasPartido ep
-      INNER JOIN Participantes p ON ep.ParticipanteId = p.IdParticipante
-      WHERE ep.PartidoId = @IdPartido
-      ORDER BY p.Nombre, ep.NombreCampo
+    ep.IdEstadistica,
+    ep.ParticipanteId,
+    COALESCE(
+    e.Nombre, 
+    CONCAT(per.Nombre, ' ', per.Apellido)
+    ) as ParticipanteNombre,
+    ep.NombreCampo,
+    ep.Valor,
+    ep.FechaRegistro
+    FROM EstadisticasPartido ep
+    INNER JOIN Participantes p ON ep.ParticipanteId = p.IdParticipante
+    LEFT JOIN Equipos e ON p.EquipoId = e.IdEquipo
+    LEFT JOIN Socios s ON p.SocioId = s.IdSocio
+    LEFT JOIN Personas per ON s.IdPersona = per.IdPersona
+    WHERE ep.PartidoId = @IdPartido
+    ORDER BY ParticipanteNombre, ep.NombreCampo
     `);
 
   // console.log("Estadísticas encontradas:", result.recordset);

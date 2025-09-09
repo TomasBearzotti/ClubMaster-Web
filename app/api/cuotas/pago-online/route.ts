@@ -1,91 +1,121 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { getConnection, sql } from "@/lib/sql-server"
+import { type NextRequest, NextResponse } from "next/server";
+import { getConnection, sql } from "@/lib/sql-server";
 
 export async function POST(request: NextRequest) {
   try {
-    const { cuotaId, metodoPago, datosTransaccion } = await request.json()
+    const { cuotaId, metodoPago } = await request.json();
 
     if (!cuotaId || !metodoPago) {
-      return NextResponse.json({ error: "ID de cuota y método de pago son requeridos" }, { status: 400 })
+      return NextResponse.json(
+        { error: "ID de cuota y método de pago son requeridos" },
+        { status: 400 }
+      );
     }
 
-    // Validar que el método de pago sea válido para socios
-    const metodosPermitidos = ["tarjeta_credito", "tarjeta_debito", "transferencia"]
+    // Métodos permitidos para socios
+    const metodosPermitidos = [
+      "tarjeta_credito",
+      "tarjeta_debito",
+      "transferencia",
+    ];
     if (!metodosPermitidos.includes(metodoPago)) {
-      return NextResponse.json({ error: "Método de pago no permitido para socios" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Método de pago no permitido para socios" },
+        { status: 400 }
+      );
     }
 
-    const pool = await getConnection()
+    const pool = await getConnection();
 
-    // Verificar si la cuota existe y está pendiente
-    const cuotaCheck = await pool
-      .request()
-      .input("cuotaId", sql.Int, cuotaId)
+    // 🔎 Verificar cuota
+    const cuotaCheck = await pool.request().input("cuotaId", sql.Int, cuotaId)
       .query(`
-        SELECT c.Estado, c.Monto, c.FechaVencimiento, s.Nombre
+        SELECT c.Estado, c.Monto, c.FechaVencimiento, p.Nombre, p.Apellido
         FROM Cuotas c
         INNER JOIN Socios s ON c.SocioId = s.IdSocio
+        INNER JOIN Personas p ON s.IdPersona = p.IdPersona
         WHERE c.IdCuota = @cuotaId
-      `)
+      `);
 
     if (cuotaCheck.recordset.length === 0) {
-      return NextResponse.json({ error: "Cuota no encontrada" }, { status: 404 })
+      return NextResponse.json(
+        { error: "Cuota no encontrada" },
+        { status: 404 }
+      );
     }
 
-    if (cuotaCheck.recordset[0].Estado === 1) {
-      return NextResponse.json({ error: "La cuota ya ha sido pagada" }, { status: 400 })
+    const cuota = cuotaCheck.recordset[0];
+
+    if (cuota.Estado === 1) {
+      return NextResponse.json(
+        { error: "La cuota ya ha sido pagada" },
+        { status: 400 }
+      );
     }
 
-    // Calcular recargo si aplica
-    const fechaVencimiento = new Date(cuotaCheck.recordset[0].FechaVencimiento)
-    const fechaActual = new Date()
-    const mesesVencidos = Math.max(
-      0,
-      Math.floor((fechaActual.getTime() - fechaVencimiento.getTime()) / (1000 * 60 * 60 * 24 * 30)),
-    )
-    const recargo = cuotaCheck.recordset[0].Monto * (mesesVencidos * 0.1)
+    // 🔎 Calcular recargo (10% mensual, tope 6 meses)
+    const fechaVencimiento = new Date(cuota.FechaVencimiento);
+    const fechaActual = new Date();
+    let mesesVencidos =
+      (fechaActual.getFullYear() - fechaVencimiento.getFullYear()) * 12 +
+      (fechaActual.getMonth() - fechaVencimiento.getMonth());
 
-    // Simular procesamiento de pago (en producción aquí iría la integración con el gateway de pago)
-    const transaccionExitosa = Math.random() > 0.1 // 90% de éxito
+    if (mesesVencidos < 0) mesesVencidos = 0;
+    if (mesesVencidos > 6) mesesVencidos = 6;
 
+    const recargo = cuota.Monto * (mesesVencidos * 0.1);
+
+    // 🔎 Simulación de gateway
+    const transaccionExitosa = Math.random() > 0.1; // 90% de éxito
     if (!transaccionExitosa) {
-      return NextResponse.json({ error: "Error en el procesamiento del pago. Intenta nuevamente." }, { status: 400 })
+      return NextResponse.json(
+        { error: "Error en el procesamiento del pago. Intenta nuevamente." },
+        { status: 400 }
+      );
     }
 
-    // Registrar el pago
-    const numeroTransaccion = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    const numeroTransaccion = `TXN-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
 
+    // 🔎 Actualizar cuota como pagada
     const result = await pool
       .request()
       .input("cuotaId", sql.Int, cuotaId)
       .input("fechaPago", sql.DateTime2, fechaActual)
       .input("recargo", sql.Decimal(10, 2), recargo)
       .input("metodoPago", sql.NVarChar, metodoPago)
-      .input("numeroTransaccion", sql.NVarChar, numeroTransaccion)
-      .query(`
+      .input("numeroTransaccion", sql.NVarChar, numeroTransaccion).query(`
         UPDATE Cuotas
-        SET Estado = 1, 
-            FechaPago = @fechaPago, 
+        SET Estado = 1,
+            FechaPago = @fechaPago,
             Recargo = @recargo,
             MetodoPago = @metodoPago,
             NumeroTransaccion = @numeroTransaccion
         WHERE IdCuota = @cuotaId
-      `)
+      `);
 
     if (result.rowsAffected[0] === 0) {
-      return NextResponse.json({ error: "No se pudo procesar el pago" }, { status: 500 })
+      return NextResponse.json(
+        { error: "No se pudo procesar el pago" },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
       success: true,
       message: "Pago procesado exitosamente",
       numeroTransaccion,
-      montoTotal: cuotaCheck.recordset[0].Monto + recargo,
+      socio: `${cuota.Nombre} ${cuota.Apellido}`,
+      montoTotal: cuota.Monto + recargo,
       recargo,
       metodoPago,
-    })
+    });
   } catch (error) {
-    console.error("Error procesando pago online:", error)
-    return NextResponse.json({ error: "Error interno del servidor al procesar pago" }, { status: 500 })
+    console.error("Error procesando pago online:", error);
+    return NextResponse.json(
+      { error: "Error interno del servidor al procesar pago" },
+      { status: 500 }
+    );
   }
 }

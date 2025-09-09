@@ -1,214 +1,108 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getConnection, sql } from "@/lib/sql-server";
 import * as XLSX from "xlsx";
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const IdPartido = searchParams.get("IdPartido");
+    const partidoId = searchParams.get("partidoId");
 
-    if (!IdPartido) {
+    if (!partidoId) {
       return NextResponse.json(
-        { error: "IdPartido es requerido" },
+        { error: "Se requiere partidoId" },
         { status: 400 }
       );
     }
 
     const pool = await getConnection();
 
-    // 1. Obtener partido
+    // 🔎 Datos del partido
     const partidoResult = await pool
       .request()
-      .input("IdPartido", sql.Int, Number(IdPartido))
-      .query(`SELECT TOP 1 * FROM Partidos WHERE IdPartido = @IdPartido`);
-
-    const partido = partidoResult.recordset[0];
-    if (!partido) {
-      return NextResponse.json(
-        { error: "No se encontró el partido" },
-        { status: 404 }
-      );
-    }
-
-    // 2. Obtener disciplina del torneo
-    const torneoResult = await pool
-      .request()
-      .input("IdTorneo", sql.Int, partido.TorneoId)
-      .query(
-        `SELECT TOP 1 Disciplina, Nombre FROM Torneos WHERE IdTorneo = @IdTorneo`
-      );
-
-    const torneo = torneoResult.recordset[0];
-    if (!torneo) {
-      return NextResponse.json(
-        { error: "No se encontró el torneo" },
-        { status: 404 }
-      );
-    }
-    const disciplina = torneo.Disciplina;
-
-    // 3. Obtener IdDeporte
-    const deporteResult = await pool
-      .request()
-      .input("Disciplina", sql.NVarChar, disciplina)
-      .query(
-        `SELECT TOP 1 IdDeporte, Nombre FROM Deportes WHERE Nombre = @Disciplina`
-      );
-
-    const deporte = deporteResult.recordset[0];
-    if (!deporte) {
-      return NextResponse.json(
-        { error: "No se encontró el deporte correspondiente a la disciplina" },
-        { status: 404 }
-      );
-    }
-
-    const IdDeporte = deporte.IdDeporte;
-    const sportName = deporte.Nombre;
-
-    // 4. Traer campos de plantilla
-    const plantillaResult = await pool
-      .request()
-      .input("deporteId", sql.Int, IdDeporte).query(`
-        SELECT NombreCampo, TipoDato, EsObligatorio, Orden
-        FROM PlantillasEstadisticas
-        WHERE IdDeporte = @deporteId
-        ORDER BY Orden
+      .input("partidoId", sql.Int, Number(partidoId)).query(`
+        SELECT 
+          p.IdPartido,
+          p.ParticipanteAId,
+          p.ParticipanteBId,
+          t.Disciplina
+        FROM Partidos p
+        INNER JOIN Torneos t ON p.TorneoId = t.IdTorneo
+        WHERE p.IdPartido = @partidoId
       `);
 
-    const campos = plantillaResult.recordset;
-    if (campos.length === 0) {
+    if (partidoResult.recordset.length === 0) {
       return NextResponse.json(
-        { error: "No hay plantilla configurada para este deporte" },
+        { error: "Partido no encontrado" },
         { status: 404 }
       );
     }
 
-    // 5. Obtener nombres de participantes
+    const partido = partidoResult.recordset[0];
+
+    // 🔎 Participantes con nombres correctos
     const participantesResult = await pool
       .request()
       .input("ParticipanteAId", sql.Int, partido.ParticipanteAId)
       .input("ParticipanteBId", sql.Int, partido.ParticipanteBId).query(`
-        SELECT IdParticipante, Nombre
-        FROM Participantes
-        WHERE IdParticipante IN (@ParticipanteAId, @ParticipanteBId)
+        SELECT 
+          p.IdParticipante,
+          COALESCE(e.Nombre, CONCAT(per.Nombre, ' ', per.Apellido)) as NombreParticipante
+        FROM Participantes p
+        LEFT JOIN Equipos e ON p.EquipoId = e.IdEquipo
+        LEFT JOIN Socios s ON p.SocioId = s.IdSocio
+        LEFT JOIN Personas per ON s.IdPersona = per.IdPersona
+        WHERE p.IdParticipante IN (@ParticipanteAId, @ParticipanteBId)
       `);
 
     const participantesMap = Object.fromEntries(
       participantesResult.recordset.map((p: any) => [
         p.IdParticipante,
-        p.Nombre,
+        p.NombreParticipante,
       ])
     );
 
-    const participantes = [
-      participantesMap[partido.ParticipanteAId] || "ParticipanteA",
-      participantesMap[partido.ParticipanteBId] || "ParticipanteB",
-    ];
+    // 🔎 Campos de plantilla
+    const plantillaResult = await pool
+      .request()
+      .input("disciplina", sql.NVarChar, partido.Disciplina).query(`
+        SELECT NombreCampo
+        FROM PlantillasEstadisticas
+        WHERE Disciplina = @disciplina
+        ORDER BY IdCampo
+      `);
 
-    // Crear workbook
-    const workbook = XLSX.utils.book_new();
+    const campos = plantillaResult.recordset.map((c: any) => c.NombreCampo);
 
-    // Hoja 1: Plantilla de estadísticas
-    const headers = [
-      "Participante",
-      ...campos.map((c) =>
-        c.EsObligatorio ? `${c.NombreCampo} *` : c.NombreCampo
-      ),
-    ];
-    const data = [headers];
+    // 🔎 Crear hoja con encabezados
+    const data: any[][] = [];
+    data.push(["Participante", ...campos]);
 
-    participantes.forEach((nombre) => {
-      const fila = [
-        nombre,
-        ...campos.map((c) => {
-          if (c.EsObligatorio)
-            return c.TipoDato === "int"
-              ? 0
-              : c.TipoDato === "decimal"
-              ? 0.0
-              : "FALTANTE";
-          return c.TipoDato === "int" ? 0 : c.TipoDato === "decimal" ? 0.0 : "";
-        }),
-      ];
-      data.push(fila);
+    // Filas por participante
+    [partido.ParticipanteAId, partido.ParticipanteBId].forEach((id: number) => {
+      const nombre = participantesMap[id] || `Participante ${id}`;
+      data.push([nombre, ...campos.map(() => "")]);
     });
 
+    // Generar workbook
     const worksheet = XLSX.utils.aoa_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Estadísticas");
 
-    // Ajustar ancho de columnas
-    const colWidths = headers.map((h, i) => {
-      const maxLen = data.reduce(
-        (max, row) => Math.max(max, row[i]?.toString()?.length || 0),
-        0
-      );
-      return { wch: Math.max(15, maxLen + 2) };
-    });
-    worksheet["!cols"] = colWidths;
+    // Escribir buffer
+    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Plantilla");
-
-    // Hoja 2: Tabla explicativa de campos con ajuste de columnas
-    const explicacion = [
-      ["Campo", "Tipo de dato", "Obligatorio", "Comentario / Ejemplo"],
-      ...campos.map((c) => [
-        c.NombreCampo,
-        c.TipoDato,
-        c.EsObligatorio ? "Sí" : "No",
-        c.TipoDato === "int"
-          ? "Número entero"
-          : c.TipoDato === "decimal"
-          ? "Número decimal"
-          : "Texto",
-      ]),
-    ];
-
-    const worksheetExplicacion = XLSX.utils.aoa_to_sheet(explicacion);
-
-    // Ajustar ancho de columnas automáticamente
-    const colWidthsExplicacion = explicacion[0].map((_, i) => {
-      const maxLen = explicacion.reduce(
-        (max, row) => Math.max(max, row[i]?.toString()?.length || 0),
-        0
-      );
-      return { wch: Math.max(15, maxLen + 2) }; // ancho mínimo 15 + padding
-    });
-    worksheetExplicacion["!cols"] = colWidthsExplicacion;
-
-    XLSX.utils.book_append_sheet(workbook, worksheetExplicacion, "Explicacion");
-
-    const excelBuffer = XLSX.write(workbook, {
-      type: "buffer",
-      bookType: "xlsx",
-    });
-
-    // Función para limpiar acentos y caracteres especiales
-    function sanitizeName(name: string) {
-      return name
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-zA-Z0-9]/g, "");
-    }
-
-    const torneoNombreSeguro = (torneo.Nombre || "Torneo").replace(/\s+/g, "");
-    const participantesSeguro = `${sanitizeName(
-      participantes[0]
-    )}_VS_${sanitizeName(participantes[1])}`;
-    const fase = (partido.Fase || "Fase").replace(/\s+/g, "");
-
-    const filename = `${torneoNombreSeguro}_${participantesSeguro}_${fase}.xlsx`;
-
-    return new NextResponse(excelBuffer, {
+    return new NextResponse(buffer, {
+      status: 200,
       headers: {
+        "Content-Disposition": `attachment; filename=plantilla_partido_${partidoId}.xlsx`,
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="${filename}"`,
       },
     });
   } catch (error) {
-    console.error("Error generando plantilla Excel:", error);
+    console.error("Error descargando plantilla:", error);
     return NextResponse.json(
-      { error: "Error interno del servidor" },
+      { error: "Error interno del servidor al generar plantilla" },
       { status: 500 }
     );
   }

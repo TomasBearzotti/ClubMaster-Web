@@ -1,10 +1,23 @@
-"use client"
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
+"use client";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -13,146 +26,191 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Users, Plus, Edit, UserPlus, Trash2 } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { Checkbox } from "@/components/ui/checkbox"
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ArrowLeft, Users, Plus, Edit, UserPlus, Trash2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Equipo {
-  IdEquipo: number
-  Nombre: string
-  Disciplina: string
-  CapitanId: number
-  NombreCapitan: string
-  FechaCreacion: string
-  CantidadIntegrantes: number
+  IdEquipo: number;
+  Nombre: string;
+  Disciplina: string;
+  CapitanId: number;
+  NombreCapitan: string;
+  FechaCreacion: string;
+  CantidadIntegrantes: number;
 }
 
 interface Socio {
-  IdSocio: number
-  Nombre: string
-  Dni: string
-  Email: string
+  IdSocio: number;
+  Nombre: string;
+  Dni: string;
+  Email: string;
 }
 
 interface Integrante {
-  IdSocio: number
-  Nombre: string
-  Dni: string
-  Email: string
-  FechaIngreso: string
+  IdSocio: number;
+  Nombre: string;
+  Dni: string;
+  Email: string;
+  FechaIngreso: string;
 }
 
 export default function MisEquiposPage() {
-  const router = useRouter()
-  const { toast } = useToast()
-  const [equipos, setEquipos] = useState<Equipo[]>([])
-  const [socios, setSocios] = useState<Socio[]>([])
-  const [integrantes, setIntegrantes] = useState<Integrante[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showCreateDialog, setShowCreateDialog] = useState(false)
-  const [showEditDialog, setShowEditDialog] = useState(false)
-  const [showIntegrantesDialog, setShowIntegrantesDialog] = useState(false)
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [selectedEquipo, setSelectedEquipo] = useState<Equipo | null>(null)
+  const router = useRouter();
+  const { toast } = useToast();
+  const [equipos, setEquipos] = useState<Equipo[]>([]);
+  const [socios, setSocios] = useState<Socio[]>([]);
+  const [integrantes, setIntegrantes] = useState<Integrante[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showIntegrantesDialog, setShowIntegrantesDialog] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [selectedEquipo, setSelectedEquipo] = useState<Equipo | null>(null);
 
   // Form states
   const [formData, setFormData] = useState({
     nombre: "",
     disciplina: "",
     integrantes: [] as number[],
-  })
+  });
 
   const [editFormData, setEditFormData] = useState({
     nombre: "",
     disciplina: "",
-  })
+  });
 
-  const [selectedSociosToAdd, setSelectedSociosToAdd] = useState<number[]>([])
+  const [selectedSociosToAdd, setSelectedSociosToAdd] = useState<number[]>([]);
 
   useEffect(() => {
-    const userData = localStorage.getItem("user")
-    if (!userData) {
-      router.push("/")
-      return
-    }
-    const user = JSON.parse(userData)
-    if (user.rol !== 2) {
-      router.push("/dashboard")
-      return
-    }
-    setCurrentUser(user)
-    fetchEquipos(user.socioId)
-    fetchSocios()
-  }, [router])
+    const init = async () => {
+      const userData = localStorage.getItem("user");
+      if (!userData) {
+        router.push("/");
+        return;
+      }
+
+      const user = JSON.parse(userData);
+
+      // ✅ validar rol socio
+      if (user.idRol !== 2) {
+        router.push("/dashboard");
+        return;
+      }
+
+      if (!user.idPersona) {
+        console.error("El usuario no tiene idPersona asignado");
+        toast({
+          title: "Error",
+          description: "No se pudo cargar la información de socio.",
+          variant: "destructive",
+        });
+        router.push("/socio-dashboard");
+        return;
+      }
+
+      try {
+        // ✅ obtener IdSocio a partir de la persona
+        const socioRes = await fetch(`/api/socios/${user.idPersona}`);
+        if (!socioRes.ok) throw new Error("No se pudo obtener el socio");
+        const socioData = await socioRes.json();
+
+        // Guardar user con IdSocio resuelto
+        setCurrentUser({ ...user, socioId: socioData.IdSocio });
+
+        // Cargar equipos y socios disponibles
+        fetchEquipos(socioData.IdSocio);
+        fetchSocios();
+      } catch (err) {
+        console.error("Error resolviendo socio:", err);
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar tus equipos.",
+          variant: "destructive",
+        });
+        router.push("/socio-dashboard");
+      }
+    };
+
+    init();
+  }, [router, toast]);
 
   const fetchEquipos = async (socioId: number) => {
     try {
-      const response = await fetch(`/api/equipos?socioId=${socioId}`)
+      const response = await fetch(`/api/equipos?socioId=${socioId}`);
       if (response.ok) {
-        const data = await response.json()
-        setEquipos(data)
+        const data = await response.json();
+        setEquipos(data);
       } else {
         toast({
           title: "Error",
           description: "No se pudieron cargar los equipos.",
           variant: "destructive",
-        })
+        });
       }
     } catch (error) {
-      console.error("Error fetching equipos:", error)
+      console.error("Error fetching equipos:", error);
       toast({
         title: "Error",
         description: "Ocurrió un error al cargar los equipos.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const fetchSocios = async () => {
     try {
-      const response = await fetch("/api/socios")
+      const response = await fetch("/api/socios");
       if (response.ok) {
-        const data = await response.json()
-        setSocios(data.filter((s: Socio) => s.IdSocio !== currentUser?.socioId))
+        const data = await response.json();
+        setSocios(
+          data.filter((s: Socio) => s.IdSocio !== currentUser?.socioId)
+        );
       }
     } catch (error) {
-      console.error("Error fetching socios:", error)
+      console.error("Error fetching socios:", error);
     }
-  }
+  };
 
   const fetchIntegrantes = async (equipoId: number) => {
     try {
-      console.log(`Fetching integrantes for equipo ${equipoId}`)
-      const response = await fetch(`/api/equipos/${equipoId}/integrantes`)
+      console.log(`Fetching integrantes for equipo ${equipoId}`);
+      const response = await fetch(`/api/equipos/${equipoId}/integrantes`);
       if (response.ok) {
-        const data = await response.json()
-        console.log("Integrantes fetched:", data)
-        setIntegrantes(data)
+        const data = await response.json();
+        console.log("Integrantes fetched:", data);
+        setIntegrantes(data);
       } else {
-        console.error("Error response:", response.status, response.statusText)
-        const errorData = await response.json().catch(() => ({}))
-        console.error("Error data:", errorData)
+        console.error("Error response:", response.status, response.statusText);
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Error data:", errorData);
         toast({
           title: "Error",
           description: "No se pudieron cargar los integrantes.",
           variant: "destructive",
-        })
+        });
       }
     } catch (error) {
-      console.error("Error fetching integrantes:", error)
+      console.error("Error fetching integrantes:", error);
       toast({
         title: "Error",
         description: "Ocurrió un error al cargar los integrantes.",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const handleCreateEquipo = async () => {
     if (!formData.nombre || !formData.disciplina) {
@@ -160,8 +218,8 @@ export default function MisEquiposPage() {
         title: "Error",
         description: "Nombre y disciplina son requeridos.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     try {
@@ -176,42 +234,42 @@ export default function MisEquiposPage() {
           capitanId: currentUser.socioId,
           integrantes: formData.integrantes,
         }),
-      })
+      });
 
       if (response.ok) {
         toast({
           title: "Éxito",
           description: "Equipo creado exitosamente.",
-        })
-        setShowCreateDialog(false)
-        setFormData({ nombre: "", disciplina: "", integrantes: [] })
-        fetchEquipos(currentUser.socioId)
+        });
+        setShowCreateDialog(false);
+        setFormData({ nombre: "", disciplina: "", integrantes: [] });
+        fetchEquipos(currentUser.socioId);
       } else {
-        const error = await response.json()
+        const error = await response.json();
         toast({
           title: "Error",
           description: error.error || "Error al crear el equipo.",
           variant: "destructive",
-        })
+        });
       }
     } catch (error) {
-      console.error("Error creating equipo:", error)
+      console.error("Error creating equipo:", error);
       toast({
         title: "Error",
         description: "Ocurrió un error al crear el equipo.",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const handleEditEquipo = (equipo: Equipo) => {
-    setSelectedEquipo(equipo)
+    setSelectedEquipo(equipo);
     setEditFormData({
       nombre: equipo.Nombre,
       disciplina: equipo.Disciplina,
-    })
-    setShowEditDialog(true)
-  }
+    });
+    setShowEditDialog(true);
+  };
 
   const handleUpdateEquipo = async () => {
     if (!editFormData.nombre || !editFormData.disciplina || !selectedEquipo) {
@@ -219,8 +277,8 @@ export default function MisEquiposPage() {
         title: "Error",
         description: "Nombre y disciplina son requeridos.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     try {
@@ -233,42 +291,42 @@ export default function MisEquiposPage() {
           nombre: editFormData.nombre,
           disciplina: editFormData.disciplina,
         }),
-      })
+      });
 
       if (response.ok) {
         toast({
           title: "Éxito",
           description: "Equipo actualizado exitosamente.",
-        })
-        setShowEditDialog(false)
-        setSelectedEquipo(null)
-        fetchEquipos(currentUser.socioId)
+        });
+        setShowEditDialog(false);
+        setSelectedEquipo(null);
+        fetchEquipos(currentUser.socioId);
       } else {
-        const error = await response.json()
+        const error = await response.json();
         toast({
           title: "Error",
           description: error.error || "Error al actualizar el equipo.",
           variant: "destructive",
-        })
+        });
       }
     } catch (error) {
-      console.error("Error updating equipo:", error)
+      console.error("Error updating equipo:", error);
       toast({
         title: "Error",
         description: "Ocurrió un error al actualizar el equipo.",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const handleManageIntegrantes = (equipo: Equipo) => {
-    console.log("Managing integrantes for equipo:", equipo)
-    setSelectedEquipo(equipo)
-    setSelectedSociosToAdd([])
-    setIntegrantes([]) // Reset integrantes
-    fetchIntegrantes(equipo.IdEquipo)
-    setShowIntegrantesDialog(true)
-  }
+    console.log("Managing integrantes for equipo:", equipo);
+    setSelectedEquipo(equipo);
+    setSelectedSociosToAdd([]);
+    setIntegrantes([]); // Reset integrantes
+    fetchIntegrantes(equipo.IdEquipo);
+    setShowIntegrantesDialog(true);
+  };
 
   const handleAddIntegrantes = async () => {
     if (!selectedEquipo || selectedSociosToAdd.length === 0) {
@@ -276,30 +334,35 @@ export default function MisEquiposPage() {
         title: "Error",
         description: "Selecciona al menos un socio para agregar.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     try {
-      let successCount = 0
-      let errorCount = 0
+      let successCount = 0;
+      let errorCount = 0;
 
       for (const socioId of selectedSociosToAdd) {
-        console.log(`Adding socio ${socioId} to equipo ${selectedEquipo.IdEquipo}`)
-        const response = await fetch(`/api/equipos/${selectedEquipo.IdEquipo}/integrantes`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ socioId }),
-        })
+        console.log(
+          `Adding socio ${socioId} to equipo ${selectedEquipo.IdEquipo}`
+        );
+        const response = await fetch(
+          `/api/equipos/${selectedEquipo.IdEquipo}/integrantes`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ socioId }),
+          }
+        );
 
         if (response.ok) {
-          successCount++
+          successCount++;
         } else {
-          errorCount++
-          const error = await response.json()
-          console.error(`Error adding socio ${socioId}:`, error)
+          errorCount++;
+          const error = await response.json();
+          console.error(`Error adding socio ${socioId}:`, error);
         }
       }
 
@@ -307,10 +370,10 @@ export default function MisEquiposPage() {
         toast({
           title: "Éxito",
           description: `${successCount} integrante(s) agregado(s) exitosamente.`,
-        })
-        setSelectedSociosToAdd([])
-        fetchIntegrantes(selectedEquipo.IdEquipo)
-        fetchEquipos(currentUser.socioId)
+        });
+        setSelectedSociosToAdd([]);
+        fetchIntegrantes(selectedEquipo.IdEquipo);
+        fetchEquipos(currentUser.socioId);
       }
 
       if (errorCount > 0) {
@@ -318,68 +381,74 @@ export default function MisEquiposPage() {
           title: "Advertencia",
           description: `${errorCount} integrante(s) no pudieron ser agregados.`,
           variant: "destructive",
-        })
+        });
       }
     } catch (error) {
-      console.error("Error adding integrantes:", error)
+      console.error("Error adding integrantes:", error);
       toast({
         title: "Error",
         description: "Ocurrió un error al agregar los integrantes.",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const handleRemoveIntegrante = async (socioId: number) => {
-    if (!selectedEquipo) return
+    if (!selectedEquipo) return;
 
     try {
-      console.log(`Removing socio ${socioId} from equipo ${selectedEquipo.IdEquipo}`)
-      const response = await fetch(`/api/equipos/${selectedEquipo.IdEquipo}/integrantes?socioId=${socioId}`, {
-        method: "DELETE",
-      })
+      console.log(
+        `Removing socio ${socioId} from equipo ${selectedEquipo.IdEquipo}`
+      );
+      const response = await fetch(
+        `/api/equipos/${selectedEquipo.IdEquipo}/integrantes?socioId=${socioId}`,
+        {
+          method: "DELETE",
+        }
+      );
 
       if (response.ok) {
         toast({
           title: "Éxito",
           description: "Integrante eliminado exitosamente.",
-        })
-        fetchIntegrantes(selectedEquipo.IdEquipo)
-        fetchEquipos(currentUser.socioId)
+        });
+        fetchIntegrantes(selectedEquipo.IdEquipo);
+        fetchEquipos(currentUser.socioId);
       } else {
-        const error = await response.json()
-        console.error("Error removing integrante:", error)
+        const error = await response.json();
+        console.error("Error removing integrante:", error);
         toast({
           title: "Error",
           description: error.error || "Error al eliminar integrante.",
           variant: "destructive",
-        })
+        });
       }
     } catch (error) {
-      console.error("Error removing integrante:", error)
+      console.error("Error removing integrante:", error);
       toast({
         title: "Error",
         description: "Ocurrió un error al eliminar el integrante.",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const handleVolver = () => {
-    router.push("/socio-dashboard")
-  }
+    router.push("/socio-dashboard");
+  };
 
   // Filtrar socios que no están en el equipo actual
   const sociosDisponibles = socios.filter(
-    (socio) => !integrantes.some((integrante) => integrante.IdSocio === socio.IdSocio),
-  )
+    (socio) =>
+      !integrantes.some((integrante) => integrante.IdSocio === socio.IdSocio)
+  );
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
-    )
+    );
   }
 
   return (
@@ -391,7 +460,11 @@ export default function MisEquiposPage() {
             <div className="flex items-center">
               <h1 className="text-2xl font-bold text-blue-700">ClubMaster</h1>
             </div>
-            <Button variant="outline" onClick={handleVolver} className="flex items-center gap-2 bg-transparent">
+            <Button
+              variant="outline"
+              onClick={handleVolver}
+              className="flex items-center gap-2 bg-transparent"
+            >
               <ArrowLeft className="h-4 w-4" />
               Volver
             </Button>
@@ -407,7 +480,9 @@ export default function MisEquiposPage() {
               <Users className="h-8 w-8 text-blue-600" />
               Mis Equipos
             </h2>
-            <p className="text-gray-600">Gestiona tus equipos y sus integrantes</p>
+            <p className="text-gray-600">
+              Gestiona tus equipos y sus integrantes
+            </p>
           </div>
 
           {/* Dialog Crear Equipo */}
@@ -421,7 +496,9 @@ export default function MisEquiposPage() {
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>Crear Nuevo Equipo</DialogTitle>
-                <DialogDescription>Completa la información para crear tu equipo</DialogDescription>
+                <DialogDescription>
+                  Completa la información para crear tu equipo
+                </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
@@ -429,7 +506,9 @@ export default function MisEquiposPage() {
                   <Input
                     id="nombre"
                     value={formData.nombre}
-                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, nombre: e.target.value })
+                    }
                     placeholder="Ej: Los Tigres"
                   />
                 </div>
@@ -437,7 +516,9 @@ export default function MisEquiposPage() {
                   <Label htmlFor="disciplina">Disciplina</Label>
                   <Select
                     value={formData.disciplina}
-                    onValueChange={(value) => setFormData({ ...formData, disciplina: value })}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, disciplina: value })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecciona una disciplina" />
@@ -454,11 +535,16 @@ export default function MisEquiposPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label>Integrantes (Opcional)</Label>
-                  <p className="text-sm text-gray-500">Puedes agregar integrantes después de crear el equipo</p>
+                  <p className="text-sm text-gray-500">
+                    Puedes agregar integrantes después de crear el equipo
+                  </p>
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCreateDialog(false)}
+                >
                   Cancelar
                 </Button>
                 <Button onClick={handleCreateEquipo}>Crear Equipo</Button>
@@ -472,7 +558,9 @@ export default function MisEquiposPage() {
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Editar Equipo</DialogTitle>
-              <DialogDescription>Modifica la información de tu equipo</DialogDescription>
+              <DialogDescription>
+                Modifica la información de tu equipo
+              </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
@@ -480,7 +568,9 @@ export default function MisEquiposPage() {
                 <Input
                   id="edit-nombre"
                   value={editFormData.nombre}
-                  onChange={(e) => setEditFormData({ ...editFormData, nombre: e.target.value })}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, nombre: e.target.value })
+                  }
                   placeholder="Ej: Los Tigres"
                 />
               </div>
@@ -488,7 +578,9 @@ export default function MisEquiposPage() {
                 <Label htmlFor="edit-disciplina">Disciplina</Label>
                 <Select
                   value={editFormData.disciplina}
-                  onValueChange={(value) => setEditFormData({ ...editFormData, disciplina: value })}
+                  onValueChange={(value) =>
+                    setEditFormData({ ...editFormData, disciplina: value })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona una disciplina" />
@@ -505,7 +597,10 @@ export default function MisEquiposPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setShowEditDialog(false)}
+              >
                 Cancelar
               </Button>
               <Button onClick={handleUpdateEquipo}>Guardar Cambios</Button>
@@ -514,31 +609,49 @@ export default function MisEquiposPage() {
         </Dialog>
 
         {/* Dialog Gestionar Integrantes */}
-        <Dialog open={showIntegrantesDialog} onOpenChange={setShowIntegrantesDialog}>
+        <Dialog
+          open={showIntegrantesDialog}
+          onOpenChange={setShowIntegrantesDialog}
+        >
           <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Gestionar Integrantes - {selectedEquipo?.Nombre}</DialogTitle>
-              <DialogDescription>Agrega o elimina integrantes de tu equipo</DialogDescription>
+              <DialogTitle>
+                Gestionar Integrantes - {selectedEquipo?.Nombre}
+              </DialogTitle>
+              <DialogDescription>
+                Agrega o elimina integrantes de tu equipo
+              </DialogDescription>
             </DialogHeader>
 
             <div className="grid gap-6 py-4">
               {/* Integrantes Actuales */}
               <div>
-                <h4 className="font-medium mb-3">Integrantes Actuales ({integrantes.length})</h4>
+                <h4 className="font-medium mb-3">
+                  Integrantes Actuales ({integrantes.length})
+                </h4>
                 {integrantes.length === 0 ? (
-                  <p className="text-sm text-gray-500">No hay integrantes en este equipo</p>
+                  <p className="text-sm text-gray-500">
+                    No hay integrantes en este equipo
+                  </p>
                 ) : (
                   <div className="space-y-2">
                     {integrantes.map((integrante) => (
-                      <div key={integrante.IdSocio} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div
+                        key={integrante.IdSocio}
+                        className="flex items-center justify-between p-3 border rounded-lg"
+                      >
                         <div>
                           <p className="font-medium">{integrante.Nombre}</p>
-                          <p className="text-sm text-gray-500">DNI: {integrante.Dni}</p>
+                          <p className="text-sm text-gray-500">
+                            DNI: {integrante.Dni}
+                          </p>
                         </div>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleRemoveIntegrante(integrante.IdSocio)}
+                          onClick={() =>
+                            handleRemoveIntegrante(integrante.IdSocio)
+                          }
                           className="text-red-600 hover:text-red-700"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -553,27 +666,46 @@ export default function MisEquiposPage() {
               <div>
                 <h4 className="font-medium mb-3">Agregar Integrantes</h4>
                 {sociosDisponibles.length === 0 ? (
-                  <p className="text-sm text-gray-500">No hay socios disponibles para agregar</p>
+                  <p className="text-sm text-gray-500">
+                    No hay socios disponibles para agregar
+                  </p>
                 ) : (
                   <>
                     <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3">
                       {sociosDisponibles.map((socio) => (
-                        <div key={socio.IdSocio} className="flex items-center space-x-2">
+                        <div
+                          key={socio.IdSocio}
+                          className="flex items-center space-x-2"
+                        >
                           <Checkbox
                             id={`socio-${socio.IdSocio}`}
-                            checked={selectedSociosToAdd.includes(socio.IdSocio)}
+                            checked={selectedSociosToAdd.includes(
+                              socio.IdSocio
+                            )}
                             onCheckedChange={(checked) => {
                               if (checked) {
-                                setSelectedSociosToAdd([...selectedSociosToAdd, socio.IdSocio])
+                                setSelectedSociosToAdd([
+                                  ...selectedSociosToAdd,
+                                  socio.IdSocio,
+                                ]);
                               } else {
-                                setSelectedSociosToAdd(selectedSociosToAdd.filter((id) => id !== socio.IdSocio))
+                                setSelectedSociosToAdd(
+                                  selectedSociosToAdd.filter(
+                                    (id) => id !== socio.IdSocio
+                                  )
+                                );
                               }
                             }}
                           />
-                          <Label htmlFor={`socio-${socio.IdSocio}`} className="flex-1 cursor-pointer">
+                          <Label
+                            htmlFor={`socio-${socio.IdSocio}`}
+                            className="flex-1 cursor-pointer"
+                          >
                             <div>
                               <p className="font-medium">{socio.Nombre}</p>
-                              <p className="text-sm text-gray-500">DNI: {socio.Dni}</p>
+                              <p className="text-sm text-gray-500">
+                                DNI: {socio.Dni}
+                              </p>
                             </div>
                           </Label>
                         </div>
@@ -581,7 +713,10 @@ export default function MisEquiposPage() {
                     </div>
                     {selectedSociosToAdd.length > 0 && (
                       <div className="mt-3">
-                        <Button onClick={handleAddIntegrantes} className="w-full">
+                        <Button
+                          onClick={handleAddIntegrantes}
+                          className="w-full"
+                        >
                           Agregar {selectedSociosToAdd.length} integrante(s)
                         </Button>
                       </div>
@@ -592,7 +727,10 @@ export default function MisEquiposPage() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowIntegrantesDialog(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setShowIntegrantesDialog(false)}
+              >
                 Cerrar
               </Button>
             </DialogFooter>
@@ -604,15 +742,22 @@ export default function MisEquiposPage() {
           <CardHeader>
             <CardTitle>Mis Equipos</CardTitle>
             <CardDescription>
-              {equipos.length === 0 ? "No tienes equipos creados" : `Tienes ${equipos.length} equipo(s) creado(s)`}
+              {equipos.length === 0
+                ? "No tienes equipos creados"
+                : `Tienes ${equipos.length} equipo(s) creado(s)`}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {equipos.length === 0 ? (
               <div className="text-center py-8">
                 <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500 mb-4">No tienes equipos creados aún</p>
-                <Button onClick={() => setShowCreateDialog(true)} className="flex items-center gap-2">
+                <p className="text-gray-500 mb-4">
+                  No tienes equipos creados aún
+                </p>
+                <Button
+                  onClick={() => setShowCreateDialog(true)}
+                  className="flex items-center gap-2"
+                >
                   <Plus className="h-4 w-4" />
                   Crear mi primer equipo
                 </Button>
@@ -631,19 +776,35 @@ export default function MisEquiposPage() {
                 <TableBody>
                   {equipos.map((equipo) => (
                     <TableRow key={equipo.IdEquipo}>
-                      <TableCell className="font-medium">{equipo.Nombre}</TableCell>
+                      <TableCell className="font-medium">
+                        {equipo.Nombre}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline">{equipo.Disciplina}</Badge>
                       </TableCell>
-                      <TableCell>{equipo.CantidadIntegrantes} miembros</TableCell>
-                      <TableCell>{new Date(equipo.FechaCreacion).toLocaleDateString("es-AR")}</TableCell>
+                      <TableCell>
+                        {equipo.CantidadIntegrantes} miembros
+                      </TableCell>
+                      <TableCell>
+                        {new Date(equipo.FechaCreacion).toLocaleDateString(
+                          "es-AR"
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={() => handleEditEquipo(equipo)}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditEquipo(equipo)}
+                          >
                             <Edit className="h-4 w-4 mr-1" />
                             Editar
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleManageIntegrantes(equipo)}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleManageIntegrantes(equipo)}
+                          >
                             <UserPlus className="h-4 w-4 mr-1" />
                             Integrantes
                           </Button>
@@ -658,5 +819,5 @@ export default function MisEquiposPage() {
         </Card>
       </main>
     </div>
-  )
+  );
 }

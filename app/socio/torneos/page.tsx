@@ -146,6 +146,7 @@ export default function TorneosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [procesando, setProcesando] = useState<number | null>(null);
+  const [socioIdState, setSocioIdState] = useState<number | null>(null);
   const { toast } = useToast();
 
   // Estado para filtros
@@ -179,15 +180,65 @@ export default function TorneosPage() {
   );
 
   // Simular socioId - en producción vendría del contexto de autenticación
-  const socioId = 1;
+  // Nota: socioId fijo eliminado; ahora se usa socioIdState
 
   useEffect(() => {
-    fetchTorneos();
-    fetchEquipos();
-    fetchDeportes();
-  }, []);
+    const init = async () => {
+      const userData = localStorage.getItem("user");
+      if (!userData) {
+        router.push("/");
+        return;
+      }
 
-  const fetchTorneos = async () => {
+      const user = JSON.parse(userData);
+
+      // ✅ validar rol socio
+      if (user.idRol !== 2) {
+        router.push("/dashboard");
+        return;
+      }
+
+      if (!user.idPersona) {
+        console.error("El usuario no tiene idPersona asignado");
+        toast({
+          title: "Error",
+          description: "No se pudo cargar la información de socio.",
+          variant: "destructive",
+        });
+        router.push("/socio-dashboard");
+        return;
+      }
+
+      try {
+        // ✅ obtener IdSocio a partir de idPersona
+        const socioRes = await fetch(`/api/socios/${user.idPersona}`);
+        if (!socioRes.ok) throw new Error("No se pudo obtener el socio");
+        const socioData = await socioRes.json();
+
+        // Guardar socioId en estado (antes estaba hardcodeado en 1)
+        const socioIdReal = socioData.IdSocio;
+        setSocioIdState(socioIdReal);
+        setInscripciones({}); // limpiar inscripciones previas
+
+        // Cargar datos iniciales
+        await fetchTorneos(socioIdReal);
+        await fetchEquipos(socioIdReal);
+        await fetchDeportes();
+      } catch (err) {
+        console.error("Error inicializando torneos:", err);
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los torneos.",
+          variant: "destructive",
+        });
+        router.push("/socio-dashboard");
+      }
+    };
+
+    init();
+  }, [router, toast]);
+
+  const fetchTorneos = async (socioIdParam?: number) => {
     setLoading(true);
     setError(null);
     try {
@@ -199,8 +250,11 @@ export default function TorneosPage() {
       setTorneos(data);
 
       // Verificar inscripciones para cada torneo
-      for (const torneo of data) {
-        await checkInscripcion(torneo.IdTorneo);
+      const sid = socioIdParam ?? socioIdState ?? null;
+      if (sid) {
+        for (const torneo of data) {
+          await checkInscripcion(torneo.IdTorneo, sid);
+        }
       }
     } catch (error: any) {
       console.error("Error fetching torneos:", error);
@@ -210,9 +264,11 @@ export default function TorneosPage() {
     }
   };
 
-  const fetchEquipos = async () => {
+  const fetchEquipos = async (socioIdParam?: number) => {
     try {
-      const response = await fetch(`/api/equipos?socioId=${socioId}`);
+      const sid = socioIdParam ?? socioIdState;
+      if (!sid) return;
+      const response = await fetch(`/api/equipos?socioId=${sid}`);
       if (response.ok) {
         const data = await response.json();
         setEquipos(data);
@@ -321,10 +377,12 @@ export default function TorneosPage() {
     }
   };
 
-  const checkInscripcion = async (torneoId: number) => {
+  const checkInscripcion = async (torneoId: number, socioId?: number) => {
     try {
+      const sid = socioId ?? socioIdState;
+      if (!sid) return;
       const response = await fetch(
-        `/api/torneos/${torneoId}/mi-inscripcion?socioId=${socioId}`
+        `/api/torneos/${torneoId}/mi-inscripcion?socioId=${sid}`
       );
       if (response.ok) {
         const data = await response.json();
@@ -343,6 +401,14 @@ export default function TorneosPage() {
     tipoInscripcion: string,
     equipoId?: number
   ) => {
+    if (!socioIdState) {
+      toast({
+        title: "Error",
+        description: "No se encontró el socio para inscribir.",
+        variant: "destructive",
+      });
+      return;
+    }
     setProcesando(torneoId);
     try {
       const response = await fetch(`/api/torneos/${torneoId}/inscribir`, {
@@ -351,7 +417,7 @@ export default function TorneosPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          socioId,
+          socioId: socioIdState,
           tipoInscripcion,
           equipoId: tipoInscripcion === "equipo" ? equipoId : undefined,
         }),
@@ -364,8 +430,8 @@ export default function TorneosPage() {
           title: "¡Inscripción exitosa!",
           description: data.message,
         });
-        await checkInscripcion(torneoId);
-        await fetchTorneos(); // Actualizar contador de participantes
+        await checkInscripcion(torneoId, socioIdState);
+        await fetchTorneos(socioIdState); // Actualizar contador de participantes
         if (torneoExpandido === torneoId) {
           await fetchTorneoDetalle(torneoId); // Actualizar vista expandida
         }
@@ -389,6 +455,14 @@ export default function TorneosPage() {
   };
 
   const handleDesinscripcion = async (torneoId: number) => {
+    if (!socioIdState) {
+      toast({
+        title: "Error",
+        description: "No se encontró el socio para desinscribir.",
+        variant: "destructive",
+      });
+      return;
+    }
     setProcesando(torneoId);
     try {
       const response = await fetch(`/api/torneos/${torneoId}/desinscribir`, {
@@ -396,7 +470,7 @@ export default function TorneosPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ socioId }),
+        body: JSON.stringify({ socioId: socioIdState }),
       });
 
       const data = await response.json();
@@ -406,8 +480,8 @@ export default function TorneosPage() {
           title: "Desinscripción exitosa",
           description: data.message,
         });
-        await checkInscripcion(torneoId);
-        await fetchTorneos(); // Actualizar contador de participantes
+        await checkInscripcion(torneoId, socioIdState);
+        await fetchTorneos(socioIdState); // Actualizar contador de participantes
         if (torneoExpandido === torneoId) {
           await fetchTorneoDetalle(torneoId); // Actualizar vista expandida
         }
@@ -650,51 +724,75 @@ export default function TorneosPage() {
     });
   };
 
-  const filteredTorneos = torneos.filter((torneo) => {
-    // Filtro por búsqueda
-    if (filtros.busqueda) {
-      const busquedaLower = filtros.busqueda.toLowerCase();
-      const nombreMatch =
-        torneo.Nombre?.toLowerCase().includes(busquedaLower) || false;
-      const deporteMatch =
-        torneo.Disciplina?.toLowerCase().includes(busquedaLower) || false;
-      if (!nombreMatch && !deporteMatch) {
+  const filteredTorneos = torneos
+    .filter((torneo) => {
+      // Excluir torneos cancelados en los que NO estoy inscrito
+      const inscripcionStatus = inscripciones[torneo.IdTorneo];
+      const estaInscrito = inscripcionStatus?.inscrito || false;
+
+      if (torneo.Estado === 3 && !estaInscrito) {
         return false;
       }
-    }
 
-    // Filtro por estado
-    if (
-      filtros.estado &&
-      filtros.estado !== "all" &&
-      torneo.Estado.toString() !== filtros.estado
-    ) {
-      return false;
-    }
+      // Filtros actuales (búsqueda, estado, deporte, tipoParticipacion)
+      if (filtros.busqueda) {
+        const busquedaLower = filtros.busqueda.toLowerCase();
+        const nombreMatch =
+          torneo.Nombre?.toLowerCase().includes(busquedaLower) || false;
+        const deporteMatch =
+          torneo.Disciplina?.toLowerCase().includes(busquedaLower) || false;
+        if (!nombreMatch && !deporteMatch) {
+          return false;
+        }
+      }
 
-    // Filtro por deporte
-    if (
-      filtros.deporte &&
-      filtros.deporte !== "all" &&
-      torneo.Disciplina !== filtros.deporte
-    ) {
-      return false;
-    }
-
-    // Filtro por tipo de participación
-    if (filtros.tipoParticipacion && filtros.tipoParticipacion !== "all") {
-      const tipoTorneo = getTipoParticipacion(torneo.Disciplina);
       if (
-        filtros.tipoParticipacion !== "ambos" &&
-        tipoTorneo !== filtros.tipoParticipacion &&
-        tipoTorneo !== "ambos"
+        filtros.estado &&
+        filtros.estado !== "all" &&
+        torneo.Estado.toString() !== filtros.estado
       ) {
         return false;
       }
-    }
 
-    return true;
-  });
+      if (
+        filtros.deporte &&
+        filtros.deporte !== "all" &&
+        torneo.Disciplina !== filtros.deporte
+      ) {
+        return false;
+      }
+
+      if (filtros.tipoParticipacion && filtros.tipoParticipacion !== "all") {
+        const tipoTorneo = getTipoParticipacion(torneo.Disciplina);
+        if (
+          filtros.tipoParticipacion !== "ambos" &&
+          tipoTorneo !== filtros.tipoParticipacion &&
+          tipoTorneo !== "ambos"
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    })
+    // 🔎 Reordenar torneos
+    .sort((a, b) => {
+      const inscA = inscripciones[a.IdTorneo]?.inscrito || false;
+      const inscB = inscripciones[b.IdTorneo]?.inscrito || false;
+
+      // Participantes primero
+      if (inscA && !inscB) return -1;
+      if (!inscA && inscB) return 1;
+
+      // Cancelados al final
+      if (a.Estado === 3 && b.Estado !== 3) return 1;
+      if (a.Estado !== 3 && b.Estado === 3) return -1;
+
+      // Default: ordenar por fecha de inicio descendente
+      return (
+        new Date(b.FechaInicio).getTime() - new Date(a.FechaInicio).getTime()
+      );
+    });
 
   if (loading) {
     return (
@@ -753,7 +851,7 @@ export default function TorneosPage() {
               Error al cargar
             </h3>
             <p className="text-gray-500 mb-4">{error}</p>
-            <Button onClick={fetchTorneos}>Reintentar</Button>
+            <Button onClick={() => fetchTorneos()}>Reintentar</Button>
           </div>
         </div>
       </div>
@@ -1201,7 +1299,8 @@ export default function TorneosPage() {
                                             <Badge>{participante.tipo}</Badge>
                                           </div>
 
-                                          {participante.esEquipo &&
+                                          {Number(participante.esEquipo) ===
+                                            1 &&
                                             participante.equipoId && (
                                               <Dialog>
                                                 <DialogTrigger asChild>
@@ -1247,7 +1346,8 @@ export default function TorneosPage() {
                                                           >
                                                             <User className="h-4 w-4 text-green-600" />
                                                             <span>
-                                                              {i.Nombre}
+                                                              {i.Nombre}{" "}
+                                                              {i.Apellido}
                                                             </span>
                                                           </div>
                                                         ))
