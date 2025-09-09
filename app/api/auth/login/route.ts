@@ -1,67 +1,66 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { getConnection, sql } from "@/lib/sql-server"
-import bcrypt from "bcryptjs"
-
-const hashAdmin = await bcrypt.hash("admin", 10)
-const hashSocio = await bcrypt.hash("1234", 10)
-console.log({ hashAdmin, hashSocio })
+import { type NextRequest, NextResponse } from "next/server";
+import { getConnection } from "@/lib/sql-server";
+import bcrypt from "bcryptjs";
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password } = await request.json()
+    const { email, password } = await request.json();
 
     if (!email || !password) {
-      return NextResponse.json({ error: "Email y contraseña son requeridos" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Email y contraseña son requeridos" },
+        { status: 400 }
+      );
     }
 
-    const emailTrimmed = email.trim().toLowerCase()
-    const pool = await getConnection()
+    const pool = await getConnection();
 
-    const result = await pool
-      .request()
-      .input("email", sql.NVarChar, emailTrimmed)
-      .query(`
-        SELECT u.IdUsuario, u.Email, u.ContrasenaHash, u.Rol, s.Nombre as NombreSocio, s.IdSocio
-        FROM Usuarios u
-        LEFT JOIN Socios s ON u.IdUsuario = s.UsuarioId
-        WHERE LOWER(u.Email) = @email
-      `)
+    const result = await pool.request().input("email", email.trim()).query(`
+        SELECT 
+          IdUsuario,
+          Email,
+          ContrasenaHash,
+          IdPersona,
+          IdRol
+        FROM Usuarios
+        WHERE Email = @email
+      `);
 
     if (result.recordset.length === 0) {
-      return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 })
+      return NextResponse.json(
+        { error: "Usuario no encontrado" },
+        { status: 401 }
+      );
     }
 
-    const usuario = result.recordset[0]
-    console.log("HASH ENCONTRADO:", usuario.ContrasenaHash)
+    const user = result.recordset[0];
 
-    if (!usuario.ContrasenaHash || typeof usuario.ContrasenaHash !== "string") {
-      return NextResponse.json({ error: "Error interno: contraseña inválida" }, { status: 500 })
+    const isValidPassword = await bcrypt.compare(password, user.ContrasenaHash);
+    if (!isValidPassword) {
+      return NextResponse.json(
+        { error: "Contraseña incorrecta" },
+        { status: 401 }
+      );
     }
 
-    const passwordValid = await bcrypt.compare(password, usuario.ContrasenaHash)
-    console.log("¿Password válido?", passwordValid)
-
-    if (!passwordValid) {
-      return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 })
-    }
-
-    let rolTexto = "Usuario"
-    if (usuario.Rol === 1) rolTexto = "Administrador"
-    else if (usuario.Rol === 2) rolTexto = "Socio"
+    // Guardar datos mínimos del usuario para cache posterior
+    const userData = {
+      idUsuario: user.IdUsuario,
+      email: user.Email,
+      idPersona: user.IdPersona,
+      idRol: user.IdRol,
+    };
 
     return NextResponse.json({
       success: true,
-      user: {
-        id: usuario.IdUsuario,
-        email: usuario.Email,
-        rol: usuario.Rol,
-        rolTexto,
-        nombre: usuario.NombreSocio || "Usuario",
-        socioId: usuario.IdSocio || null,
-      },
-    })
+      user: userData,
+      message: "Login exitoso",
+    });
   } catch (error) {
-    console.error("Error en login:", error)
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+    console.error("Error en login:", error);
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 }
+    );
   }
 }
