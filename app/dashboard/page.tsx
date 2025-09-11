@@ -283,6 +283,23 @@ export default function DashboardPage() {
         <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <Card
             className="hover:shadow-lg transition-shadow cursor-pointer"
+            onClick={() => router.push("/usuarios")}
+          >
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-lg font-semibold">
+                Gestión de Usuarios
+              </CardTitle>
+              <Users className="h-6 w-6 text-indigo-600" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Administra las cuentas de acceso y roles de los usuarios del
+                sistema.
+              </p>
+            </CardContent>
+          </Card>
+          <Card
+            className="hover:shadow-lg transition-shadow cursor-pointer"
             onClick={() => router.push("/socios")}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

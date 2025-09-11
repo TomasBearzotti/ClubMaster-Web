@@ -54,7 +54,8 @@ import { format } from "date-fns";
 interface Torneo {
   IdTorneo: number;
   Nombre: string;
-  Disciplina: string;
+  IdDeporte: number;
+  NombreDeporte: string;
   FechaInicio: string;
   Estado: number;
   Participantes: number;
@@ -67,7 +68,8 @@ interface Torneo {
 interface Equipo {
   IdEquipo: number;
   Nombre: string;
-  Disciplina: string;
+  IdDeporte: number;
+  NombreDeporte: string;
 }
 
 type Participante = {
@@ -595,18 +597,18 @@ export default function TorneosPage() {
     const [equipoSeleccionado, setEquipoSeleccionado] = useState<string>("");
 
     const esIndividual = DEPORTES_INDIVIDUALES.some((d) =>
-      torneo.Disciplina?.toLowerCase().includes(d.toLowerCase())
+      torneo.NombreDeporte?.toLowerCase().includes(d.toLowerCase())
     );
     const esEquipo = DEPORTES_EQUIPOS.some((d) =>
-      torneo.Disciplina?.toLowerCase().includes(d.toLowerCase())
+      torneo.NombreDeporte?.toLowerCase().includes(d.toLowerCase())
     );
 
-    const disciplinaLower = torneo.Disciplina?.toLowerCase() || "";
+    const deporteLower = torneo.NombreDeporte?.toLowerCase() || "";
     const permiteIndividual = esIndividual;
     const permiteEquipos = esEquipo;
 
     const equiposCompatibles = equipos.filter(
-      (equipo) => equipo.Disciplina?.toLowerCase() === disciplinaLower
+      (equipo) => equipo.NombreDeporte?.toLowerCase() === deporteLower
     );
 
     const handleSubmit = () => {
@@ -730,7 +732,7 @@ export default function TorneosPage() {
       const inscripcionStatus = inscripciones[torneo.IdTorneo];
       const estaInscrito = inscripcionStatus?.inscrito || false;
 
-      if (torneo.Estado === 3 && !estaInscrito) {
+      if (torneo.Estado === 3 && !estaInscrito && filtros.estado !== "3") {
         return false;
       }
 
@@ -740,7 +742,7 @@ export default function TorneosPage() {
         const nombreMatch =
           torneo.Nombre?.toLowerCase().includes(busquedaLower) || false;
         const deporteMatch =
-          torneo.Disciplina?.toLowerCase().includes(busquedaLower) || false;
+          torneo.NombreDeporte?.toLowerCase().includes(busquedaLower) || false;
         if (!nombreMatch && !deporteMatch) {
           return false;
         }
@@ -757,13 +759,13 @@ export default function TorneosPage() {
       if (
         filtros.deporte &&
         filtros.deporte !== "all" &&
-        torneo.Disciplina !== filtros.deporte
+        torneo.NombreDeporte !== filtros.deporte
       ) {
         return false;
       }
 
       if (filtros.tipoParticipacion && filtros.tipoParticipacion !== "all") {
-        const tipoTorneo = getTipoParticipacion(torneo.Disciplina);
+        const tipoTorneo = getTipoParticipacion(torneo.NombreDeporte);
         if (
           filtros.tipoParticipacion !== "ambos" &&
           tipoTorneo !== filtros.tipoParticipacion &&
@@ -780,17 +782,19 @@ export default function TorneosPage() {
       const inscA = inscripciones[a.IdTorneo]?.inscrito || false;
       const inscB = inscripciones[b.IdTorneo]?.inscrito || false;
 
-      // Participantes primero
+      // 🥇 Inscritos primero dentro de cada estado
       if (inscA && !inscB) return -1;
       if (!inscA && inscB) return 1;
 
-      // Cancelados al final
-      if (a.Estado === 3 && b.Estado !== 3) return 1;
-      if (a.Estado !== 3 && b.Estado === 3) return -1;
+      // ⚡ Orden de estados: Activo (1) → Pendiente (0) → Finalizado (2) → Cancelado (3)
+      const estadoOrder: { [key: number]: number } = { 1: 0, 0: 1, 2: 2, 3: 3 };
+      if (estadoOrder[a.Estado] !== estadoOrder[b.Estado]) {
+        return estadoOrder[a.Estado] - estadoOrder[b.Estado];
+      }
 
-      // Default: ordenar por fecha de inicio descendente
+      // ⏱️ Dentro del mismo estado → ordenar por fecha de inicio ascendente
       return (
-        new Date(b.FechaInicio).getTime() - new Date(a.FechaInicio).getTime()
+        new Date(a.FechaInicio).getTime() - new Date(b.FechaInicio).getTime()
       );
     });
 
@@ -1073,9 +1077,9 @@ export default function TorneosPage() {
                               {torneo.Nombre}
                             </CardTitle>
                             <CardDescription>
-                              {torneo.Disciplina
-                                ? torneo.Disciplina
-                                : "Disciplina no especificada"}
+                              {torneo.NombreDeporte
+                                ? torneo.NombreDeporte
+                                : "Deporte no especificado"}
                             </CardDescription>
                           </div>
                         </div>
@@ -1090,7 +1094,7 @@ export default function TorneosPage() {
 
                       <div className="flex flex-wrap gap-2">
                         {getEstadoBadge(torneo.Estado)}
-                        {getTipoDeporteBadge(torneo.Disciplina)}
+                        {getTipoDeporteBadge(torneo.NombreDeporte)}
                         {estaInscrito && (
                           <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
                             ✓ Inscrito
@@ -1152,8 +1156,8 @@ export default function TorneosPage() {
                             Detalles de {torneoDetalle?.Nombre || torneo.Nombre}
                           </CardTitle>
                           <CardDescription className="text-blue-600">
-                            {torneoDetalle?.Disciplina ||
-                              torneo.Disciplina ||
+                            {torneoDetalle?.NombreDeporte ||
+                              torneo.NombreDeporte ||
                               "Deporte no especificado"}
                           </CardDescription>
                         </div>

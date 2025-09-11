@@ -1,15 +1,27 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useEffect } from "react"
-import { useRouter, useParams } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
+import { useState, useEffect } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,76 +32,79 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import { ArrowLeft, Trophy, Save, Loader2, Trash2 } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+} from "@/components/ui/alert-dialog";
+import { ArrowLeft, Trophy, Save, Loader2, Trash2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Torneo {
-  IdTorneo: number
-  Nombre: string
-  Disciplina: string
-  FechaInicio: string
-  FechaFin: string | null
-  Estado: number
-  Descripcion: string | null
-  MaxParticipantes: number | null
-  PremioGanador: string | null
+  IdTorneo: number;
+  Nombre: string;
+  IdDeporte: number;
+  NombreDeporte: string;
+  FechaInicio: string;
+  FechaFin: string | null;
+  Estado: number;
+  Descripcion: string | null;
+  MaxParticipantes: number | null;
+  PremioGanador: string | null;
 }
 
 interface Deporte {
-  IdDeporte: number
-  Nombre: string
+  IdDeporte: number;
+  Nombre: string;
 }
 
 export default function EditarTorneoPage() {
-  const router = useRouter()
-  const params = useParams()
-  const { toast } = useToast()
-  const [torneo, setTorneo] = useState<Torneo | null>(null)
-  const [deportes, setDeportes] = useState<Deporte[]>([])
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [canceling, setCanceling] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const router = useRouter();
+  const params = useParams();
+  const { toast } = useToast();
+  const [torneo, setTorneo] = useState<Torneo | null>(null);
+  const [deportes, setDeportes] = useState<Deporte[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const torneoId = params.id as string
+  const torneoId = params.id as string;
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true)
-      setError(null)
+      setLoading(true);
+      setError(null);
       try {
         // Fetch torneo data
-        const torneoResponse = await fetch(`/api/torneos/${torneoId}`)
+        const torneoResponse = await fetch(`/api/torneos/${torneoId}`);
         if (!torneoResponse.ok) {
-          throw new Error(`Error al cargar torneo: ${torneoResponse.status}`)
+          throw new Error(`Error al cargar torneo: ${torneoResponse.status}`);
         }
-        const torneoData = await torneoResponse.json()
-        setTorneo(torneoData)
+        const torneoData = await torneoResponse.json();
+        setTorneo(torneoData);
 
         // Fetch deportes
-        const deportesResponse = await fetch("/api/deportes")
+        const deportesResponse = await fetch("/api/deportes");
         if (!deportesResponse.ok) {
-          throw new Error(`Error al cargar deportes: ${deportesResponse.status}`)
+          throw new Error(
+            `Error al cargar deportes: ${deportesResponse.status}`
+          );
         }
-        const deportesData = await deportesResponse.json()
-        setDeportes(deportesData)
+        const deportesData = await deportesResponse.json();
+        setDeportes(deportesData);
       } catch (error: any) {
-        console.error("Error fetching data:", error)
-        setError(error.message)
+        console.error("Error fetching data:", error);
+        setError(error.message);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
-    fetchData()
-  }, [torneoId])
+    };
+    fetchData();
+  }, [torneoId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!torneo) return
+    e.preventDefault();
+    if (!torneo) return;
 
-    setSaving(true)
+    setSaving(true);
     try {
       const response = await fetch(`/api/torneos/${torneoId}`, {
         method: "PUT",
@@ -97,34 +112,34 @@ export default function EditarTorneoPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(torneo),
-      })
+      });
 
       if (!response.ok) {
-        throw new Error(`Error al actualizar torneo: ${response.status}`)
+        throw new Error(`Error al actualizar torneo: ${response.status}`);
       }
 
       toast({
         title: "Torneo actualizado",
         description: "Los cambios se han guardado correctamente.",
-      })
+      });
 
-      router.push("/torneos")
+      router.push("/torneos");
     } catch (error: any) {
-      console.error("Error updating torneo:", error)
+      console.error("Error updating torneo:", error);
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
-      })
+      });
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const handleCancelarTorneo = async () => {
-    if (!torneo) return
+    if (!torneo) return;
 
-    setCanceling(true)
+    setCanceling(true);
     try {
       const response = await fetch(`/api/torneos/${torneoId}`, {
         method: "PATCH",
@@ -132,54 +147,56 @@ export default function EditarTorneoPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ estado: 3 }), // 3 = Cancelado
-      })
+      });
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `Error al cancelar torneo: ${response.status}`)
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || `Error al cancelar torneo: ${response.status}`
+        );
       }
 
       toast({
         title: "Torneo cancelado",
         description: "El torneo ha sido cancelado exitosamente.",
-      })
+      });
 
-      router.push("/torneos")
+      router.push("/torneos");
     } catch (error: any) {
-      console.error("Error canceling torneo:", error)
+      console.error("Error canceling torneo:", error);
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
-      })
+      });
     } finally {
-      setCanceling(false)
+      setCanceling(false);
     }
-  }
+  };
 
   const handleInputChange = (field: keyof Torneo, value: any) => {
-    if (!torneo) return
-    setTorneo({ ...torneo, [field]: value })
-  }
+    if (!torneo) return;
+    setTorneo({ ...torneo, [field]: value });
+  };
 
   const handleVolver = () => {
-    router.push("/torneos")
-  }
+    router.push("/torneos");
+  };
 
   const getEstadoText = (estado: number) => {
     switch (estado) {
       case 0:
-        return "Pendiente"
+        return "Pendiente";
       case 1:
-        return "Activo"
+        return "Activo";
       case 2:
-        return "Finalizado"
+        return "Finalizado";
       case 3:
-        return "Cancelado"
+        return "Cancelado";
       default:
-        return "Desconocido"
+        return "Desconocido";
     }
-  }
+  };
 
   if (loading) {
     return (
@@ -189,7 +206,7 @@ export default function EditarTorneoPage() {
           <span className="text-gray-600">Cargando torneo...</span>
         </div>
       </div>
-    )
+    );
   }
 
   if (error || !torneo) {
@@ -201,7 +218,11 @@ export default function EditarTorneoPage() {
               <div className="flex items-center">
                 <h1 className="text-2xl font-bold text-blue-700">ClubMaster</h1>
               </div>
-              <Button variant="outline" onClick={handleVolver} className="flex items-center gap-2 bg-transparent">
+              <Button
+                variant="outline"
+                onClick={handleVolver}
+                className="flex items-center gap-2 bg-transparent"
+              >
                 <ArrowLeft className="h-4 w-4" />
                 Volver
               </Button>
@@ -210,11 +231,13 @@ export default function EditarTorneoPage() {
         </header>
         <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Alert variant="destructive">
-            <AlertDescription>{error || "Torneo no encontrado"}</AlertDescription>
+            <AlertDescription>
+              {error || "Torneo no encontrado"}
+            </AlertDescription>
           </Alert>
         </main>
       </div>
-    )
+    );
   }
 
   return (
@@ -226,7 +249,11 @@ export default function EditarTorneoPage() {
             <div className="flex items-center">
               <h1 className="text-2xl font-bold text-blue-700">ClubMaster</h1>
             </div>
-            <Button variant="outline" onClick={handleVolver} className="flex items-center gap-2 bg-transparent">
+            <Button
+              variant="outline"
+              onClick={handleVolver}
+              className="flex items-center gap-2 bg-transparent"
+            >
               <ArrowLeft className="h-4 w-4" />
               Volver a Torneos
             </Button>
@@ -248,7 +275,8 @@ export default function EditarTorneoPage() {
           <CardHeader>
             <CardTitle>Información del Torneo</CardTitle>
             <CardDescription>
-              Actualiza los datos del torneo según sea necesario - Estado actual: {getEstadoText(torneo.Estado)}
+              Actualiza los datos del torneo según sea necesario - Estado
+              actual: {getEstadoText(torneo.Estado)}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -259,39 +287,49 @@ export default function EditarTorneoPage() {
                   <Input
                     id="nombre"
                     value={torneo.Nombre}
-                    onChange={(e) => handleInputChange("Nombre", e.target.value)}
+                    onChange={(e) =>
+                      handleInputChange("Nombre", e.target.value)
+                    }
                     required
                     disabled={torneo.Estado === 3} // Disabled if canceled
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="disciplina">Disciplina</Label>
+                  <Label htmlFor="idDeporte">Deporte</Label>
                   <Select
-                    value={torneo.Disciplina}
-                    onValueChange={(value) => handleInputChange("Disciplina", value)}
-                    disabled={torneo.Estado === 3} // Disabled if canceled
+                    value={torneo.IdDeporte?.toString() || ""}
+                    onValueChange={(value) =>
+                      handleInputChange("IdDeporte", Number(value))
+                    }
+                    disabled={torneo.Estado === 3}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar disciplina" />
+                      <SelectValue placeholder="Seleccionar deporte" />
                     </SelectTrigger>
                     <SelectContent>
                       {deportes.map((deporte) => (
-                        <SelectItem key={deporte.IdDeporte} value={deporte.Nombre}>
+                        <SelectItem
+                          key={deporte.IdDeporte}
+                          value={deporte.IdDeporte.toString()}
+                        >
                           {deporte.Nombre}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="fechaInicio">Fecha de Inicio</Label>
                   <Input
                     id="fechaInicio"
                     type="date"
-                    value={torneo.FechaInicio ? torneo.FechaInicio.split("T")[0] : ""}
-                    onChange={(e) => handleInputChange("FechaInicio", e.target.value)}
+                    value={
+                      torneo.FechaInicio ? torneo.FechaInicio.split("T")[0] : ""
+                    }
+                    onChange={(e) =>
+                      handleInputChange("FechaInicio", e.target.value)
+                    }
                     required
                     disabled={torneo.Estado === 3} // Disabled if canceled
                   />
@@ -303,7 +341,9 @@ export default function EditarTorneoPage() {
                     id="fechaFin"
                     type="date"
                     value={torneo.FechaFin ? torneo.FechaFin.split("T")[0] : ""}
-                    onChange={(e) => handleInputChange("FechaFin", e.target.value || null)}
+                    onChange={(e) =>
+                      handleInputChange("FechaFin", e.target.value || null)
+                    }
                     disabled={torneo.Estado === 3} // Disabled if canceled
                   />
                 </div>
@@ -312,7 +352,9 @@ export default function EditarTorneoPage() {
                   <Label htmlFor="estado">Estado</Label>
                   <Select
                     value={torneo.Estado.toString()}
-                    onValueChange={(value) => handleInputChange("Estado", Number.parseInt(value))}
+                    onValueChange={(value) =>
+                      handleInputChange("Estado", Number.parseInt(value))
+                    }
                     disabled={torneo.Estado === 3} // Disabled if canceled
                   >
                     <SelectTrigger>
@@ -334,7 +376,10 @@ export default function EditarTorneoPage() {
                     type="number"
                     value={torneo.MaxParticipantes || ""}
                     onChange={(e) =>
-                      handleInputChange("MaxParticipantes", e.target.value ? Number.parseInt(e.target.value) : null)
+                      handleInputChange(
+                        "MaxParticipantes",
+                        e.target.value ? Number.parseInt(e.target.value) : null
+                      )
                     }
                     disabled={torneo.Estado === 3} // Disabled if canceled
                   />
@@ -346,7 +391,9 @@ export default function EditarTorneoPage() {
                 <Input
                   id="premioGanador"
                   value={torneo.PremioGanador || ""}
-                  onChange={(e) => handleInputChange("PremioGanador", e.target.value || null)}
+                  onChange={(e) =>
+                    handleInputChange("PremioGanador", e.target.value || null)
+                  }
                   placeholder="Ej: $10,000, Trofeo, etc."
                   disabled={torneo.Estado === 3} // Disabled if canceled
                 />
@@ -357,7 +404,9 @@ export default function EditarTorneoPage() {
                 <Textarea
                   id="descripcion"
                   value={torneo.Descripcion || ""}
-                  onChange={(e) => handleInputChange("Descripcion", e.target.value || null)}
+                  onChange={(e) =>
+                    handleInputChange("Descripcion", e.target.value || null)
+                  }
                   placeholder="Descripción del torneo..."
                   rows={4}
                   disabled={torneo.Estado === 3} // Disabled if canceled
@@ -368,7 +417,8 @@ export default function EditarTorneoPage() {
               {torneo.Estado === 3 && (
                 <Alert variant="destructive">
                   <AlertDescription>
-                    Este torneo ha sido cancelado. No se pueden realizar modificaciones.
+                    Este torneo ha sido cancelado. No se pueden realizar
+                    modificaciones.
                   </AlertDescription>
                 </Alert>
               )}
@@ -379,7 +429,11 @@ export default function EditarTorneoPage() {
                   {torneo.Estado !== 3 && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button type="button" variant="destructive" className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          className="flex items-center gap-2"
+                        >
                           <Trash2 className="h-4 w-4" />
                           Cancelar Torneo
                         </Button>
@@ -388,12 +442,16 @@ export default function EditarTorneoPage() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>¿Cancelar torneo?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Esta acción cancelará el torneo "{torneo.Nombre}". Los participantes serán notificados y no
-                            se podrán realizar más modificaciones. Esta acción no se puede deshacer.
+                            Esta acción cancelará el torneo "{torneo.Nombre}".
+                            Los participantes serán notificados y no se podrán
+                            realizar más modificaciones. Esta acción no se puede
+                            deshacer.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel>No, mantener torneo</AlertDialogCancel>
+                          <AlertDialogCancel>
+                            No, mantener torneo
+                          </AlertDialogCancel>
                           <AlertDialogAction
                             onClick={handleCancelarTorneo}
                             className="bg-red-600 hover:bg-red-700"
@@ -415,7 +473,11 @@ export default function EditarTorneoPage() {
                 </div>
 
                 <div className="flex gap-4">
-                  <Button type="button" variant="outline" onClick={handleVolver}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleVolver}
+                  >
                     Volver
                   </Button>
                   <Button
@@ -442,5 +504,5 @@ export default function EditarTorneoPage() {
         </Card>
       </main>
     </div>
-  )
+  );
 }

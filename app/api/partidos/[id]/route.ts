@@ -12,42 +12,47 @@ export async function GET(
     const result = await pool
       .request()
       .input("partidoId", sql.Int, Number.parseInt(partidoId)).query(`
-        SELECT 
-  p.IdPartido,
-  p.TorneoId,
-  p.FechaPartido,
-  p.HoraPartido,
-  p.Lugar,
-  p.Fase,
-  p.Grupo,
-  p.Estado,
-  p.EstadoPartido,
-  p.ArbitroId,
-  t.Nombre as TorneoNombre,
-  t.FechaInicio,
-  t.FechaFin,
-  CASE 
-    WHEN part1.EsEquipo = 1 THEN e1.Nombre
-    ELSE CONCAT(per1.Nombre, ' ', per1.Apellido)
-  END as ParticipanteA,
-  CASE 
-    WHEN part2.EsEquipo = 1 THEN e2.Nombre
-    ELSE CONCAT(per2.Nombre, ' ', per2.Apellido)
-  END as ParticipanteB,
-  CONCAT(perArb.Nombre, ' ', perArb.Apellido) as ArbitroNombre
-FROM Partidos p
-INNER JOIN Torneos t ON p.TorneoId = t.IdTorneo
-LEFT JOIN Participantes part1 ON p.ParticipanteAId = part1.IdParticipante
-LEFT JOIN Participantes part2 ON p.ParticipanteBId = part2.IdParticipante
-LEFT JOIN Equipos e1 ON part1.EquipoId = e1.IdEquipo
-LEFT JOIN Equipos e2 ON part2.EquipoId = e2.IdEquipo
-LEFT JOIN Socios s1 ON part1.SocioId = s1.IdSocio
-LEFT JOIN Personas per1 ON s1.IdPersona = per1.IdPersona
-LEFT JOIN Socios s2 ON part2.SocioId = s2.IdSocio
-LEFT JOIN Personas per2 ON s2.IdPersona = per2.IdPersona
-LEFT JOIN Arbitros arb ON p.ArbitroId = arb.IdArbitro
-LEFT JOIN Personas perArb ON arb.IdPersona = perArb.IdPersona
-WHERE p.IdPartido = @partidoId
+      SELECT 
+          p.IdPartido,
+          p.TorneoId,
+          t.IdDeporte,
+          d.Nombre AS NombreDeporte,
+          p.FechaPartido,
+          p.HoraPartido,
+          p.Lugar,
+          p.Fase,
+          p.Grupo,
+          p.Estado,
+          p.EstadoPartido,
+          p.ArbitroId,
+          t.Nombre as TorneoNombre,
+          t.FechaInicio,
+          t.FechaFin,
+          p.ParticipanteAId,
+          p.ParticipanteBId,  
+        CASE 
+          WHEN part1.EsEquipo = 1 THEN e1.Nombre
+          ELSE CONCAT(per1.Nombre, ' ', per1.Apellido)
+        END as ParticipanteA,
+        CASE 
+          WHEN part2.EsEquipo = 1 THEN e2.Nombre
+          ELSE CONCAT(per2.Nombre, ' ', per2.Apellido)
+        END as ParticipanteB,
+        CONCAT(perArb.Nombre, ' ', perArb.Apellido) as ArbitroNombre
+        FROM Partidos p
+        INNER JOIN Torneos t ON p.TorneoId = t.IdTorneo
+        INNER JOIN Deportes d ON t.IdDeporte = d.IdDeporte
+        LEFT JOIN Participantes part1 ON p.ParticipanteAId = part1.IdParticipante
+        LEFT JOIN Participantes part2 ON p.ParticipanteBId = part2.IdParticipante
+        LEFT JOIN Equipos e1 ON part1.EquipoId = e1.IdEquipo
+        LEFT JOIN Equipos e2 ON part2.EquipoId = e2.IdEquipo
+        LEFT JOIN Socios s1 ON part1.SocioId = s1.IdSocio
+        LEFT JOIN Personas per1 ON s1.IdPersona = per1.IdPersona
+        LEFT JOIN Socios s2 ON part2.SocioId = s2.IdSocio
+        LEFT JOIN Personas per2 ON s2.IdPersona = per2.IdPersona
+        LEFT JOIN Arbitros arb ON p.ArbitroId = arb.IdArbitro
+        LEFT JOIN Personas perArb ON arb.IdPersona = perArb.IdPersona
+        WHERE p.IdPartido = @partidoId
       `);
 
     if (result.recordset.length === 0) {
@@ -63,12 +68,16 @@ WHERE p.IdPartido = @partidoId
     const partidoFormateado = {
       IdPartido: partido.IdPartido,
       IdTorneo: partido.TorneoId,
+      IdDeporte: partido.IdDeporte,
+      NombreDeporte: partido.NombreDeporte,
       FechaHora:
         partido.FechaPartido && partido.HoraPartido
           ? `${partido.FechaPartido.toISOString().split("T")[0]}T${
               partido.HoraPartido
             }`
           : null,
+      ParticipanteAId: partido.ParticipanteAId,
+      ParticipanteBId: partido.ParticipanteBId,
       ParticipanteA: partido.ParticipanteA || "TBD",
       ParticipanteB: partido.ParticipanteB || "TBD",
       Fase: partido.Fase,

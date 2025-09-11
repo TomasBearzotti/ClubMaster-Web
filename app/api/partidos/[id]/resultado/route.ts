@@ -2,156 +2,148 @@ import { NextRequest, NextResponse } from "next/server";
 import { getConnection, sql } from "@/lib/sql-server";
 import * as XLSX from "xlsx";
 
-export const config = {
-  api: { bodyParser: false },
-};
-
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest) {
   try {
-    const IdPartido = parseInt(params.id, 10);
-    if (!IdPartido) {
-      return NextResponse.json(
-        { error: "IdPartido inválido" },
-        { status: 400 }
-      );
-    }
-
-    // Obtener file del formData
-    const formData = await req.formData();
-    const file = formData.get("file") as Blob | null;
+    const formData = await request.formData();
+    const file = formData.get("file") as File;
+    const partidoIdFromUrl = request.url.split("/").slice(-2)[0]; // o usar params si definís el handler así
     if (!file) {
       return NextResponse.json(
-        { error: "No se subió ningún archivo" },
+        { error: "Se requiere un archivo Excel" },
         { status: 400 }
       );
     }
+    const partidoId = Number(partidoIdFromUrl);
 
-    // Leer excel desde arrayBuffer
     const arrayBuffer = await file.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer, { type: "array" });
+    const buffer = Buffer.from(arrayBuffer);
 
+    // 🔎 Leer Excel
+    const workbook = XLSX.read(buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
 
-    type ExcelRow = { Participante?: string; [key: string]: unknown };
+    // Convertir a JSON (una fila = participante)
+    const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
-    const jsonData = XLSX.utils.sheet_to_json(sheet, {
-      defval: null,
-    }) as ExcelRow[];
-
-    if (!Array.isArray(jsonData) || jsonData.length === 0) {
+    if (rows.length === 0) {
       return NextResponse.json(
-        { error: "Excel vacío o formato inválido" },
+        { error: "El archivo Excel está vacío" },
         { status: 400 }
       );
     }
 
     const pool = await getConnection();
 
-    // Iniciar transacción
-    const transaction = pool.transaction();
-    await transaction.begin();
+    // 🔎 Buscar IdDeporte del partido
+    const partidoResult = await pool
+      .request()
+      .input("IdPartido", sql.Int, Number(partidoId))
+      .query(`SELECT TorneoId FROM Partidos WHERE IdPartido = @IdPartido`);
 
-    try {
-      // 1) Borrar las estadísticas antiguas del partido
-      await transaction.request().input("PartidoId", sql.Int, IdPartido).query(`
-          DELETE FROM EstadisticasPartido
-          WHERE PartidoId = @PartidoId
+    const torneoId = partidoResult.recordset[0].TorneoId;
+
+    const torneoResult = await pool
+      .request()
+      .input("IdTorneo", sql.Int, torneoId)
+      .query(`SELECT IdDeporte FROM Torneos WHERE IdTorneo = @IdTorneo`);
+
+    const idDeporte = torneoResult.recordset[0].IdDeporte;
+
+    // 🔎 Obtener plantilla completa
+    const plantillaResult = await pool
+      .request()
+      .input("IdDeporte", sql.Int, idDeporte)
+      .query(
+        `SELECT IdPlantilla, NombreCampo FROM PlantillasEstadisticas WHERE IdDeporte = @IdDeporte`
+      );
+
+    const plantillaMap = Object.fromEntries(
+      plantillaResult.recordset.map(
+        (p: any) =>
+          [p.NombreCampo.toLowerCase(), p.IdPlantilla] as [string, number]
+      )
+    );
+
+    // 🔎 Guardar último participante por si la celda está vacía en Excel
+    let lastParticipanteNombre: string | null = null;
+
+    for (const row of rows) {
+      const participanteNombreRaw: string =
+        row["Participante"] || lastParticipanteNombre || "";
+      if (!participanteNombreRaw) continue;
+      lastParticipanteNombre = participanteNombreRaw;
+
+      const participanteNombre = participanteNombreRaw
+        .toString()
+        .trim()
+        .toLowerCase();
+
+      // Buscar ParticipanteId según nombre (equipo o socio)
+      const participanteResult = await pool
+        .request()
+        .input("nombre", sql.NVarChar, participanteNombre).query(`
+          SELECT TOP 1 p.IdParticipante
+          FROM Participantes p
+          LEFT JOIN Equipos e ON p.EquipoId = e.IdEquipo
+          LEFT JOIN Socios s ON p.SocioId = s.IdSocio
+          LEFT JOIN Personas per ON s.IdPersona = per.IdPersona
+          WHERE LOWER(e.Nombre) = @nombre 
+             OR LOWER(CONCAT(per.Nombre, ' ', per.Apellido)) = @nombre
         `);
 
-      let insertCount = 0;
-      const missingParticipants: string[] = [];
-
-      // Recorremos cada fila del excel y hacemos inserts
-      for (const row of jsonData) {
-        // Nombre del participante (columna exacta "Participante")
-        const participanteNombreRaw = row["Participante"];
-        const participanteNombre =
-          typeof participanteNombreRaw === "string"
-            ? participanteNombreRaw.trim()
-            : String(participanteNombreRaw || "").trim();
-
-        if (!participanteNombre) {
-          // si no viene nombre, la fila no se procesa
-          continue;
-        }
-
-        // Buscar IdParticipante por nombre (TOP 1)
-        const participanteResult = await transaction
-          .request()
-          .input("Nombre", sql.NVarChar, participanteNombre)
-          .query(
-            "SELECT TOP 1 IdParticipante FROM Participantes WHERE Nombre = @Nombre"
-          );
-
-        if (participanteResult.recordset.length === 0) {
-          // Si no existe el participante lo registramos en missing y saltamos
-          missingParticipants.push(participanteNombre);
-          continue;
-        }
-
-        const participanteId = participanteResult.recordset[0].IdParticipante;
-
-        // Insertar cada campo de la fila excepto la columna "Participante"
-        for (const key of Object.keys(row)) {
-          if (key === "Participante") continue;
-
-          const rawValor = row[key];
-          const valor = rawValor == null ? null : String(rawValor);
-
-          await transaction
-            .request()
-            .input("PartidoId", sql.Int, IdPartido)
-            .input("ParticipanteId", sql.Int, participanteId)
-            .input("NombreCampo", sql.NVarChar, key)
-            .input("Valor", sql.NVarChar, valor)
-            .query(
-              `
-                INSERT INTO EstadisticasPartido (PartidoId, ParticipanteId, NombreCampo, Valor, FechaRegistro)
-                VALUES (@PartidoId, @ParticipanteId, @NombreCampo, @Valor, GETDATE())
-              `
-            );
-
-          insertCount++;
-        }
+      if (participanteResult.recordset.length === 0) {
+        console.warn(`Participante no encontrado: ${participanteNombreRaw}`);
+        continue;
       }
 
-      // 2) Actualizar estado del partido a finalizado
-      await transaction
-        .request()
-        .input("PartidoId", sql.Int, IdPartido)
-        .input("EstadoPartido", sql.NVarChar, "Finalizado")
-        .input("EstadoNum", sql.Int, 2).query(`
-          UPDATE Partidos
-          SET EstadoPartido = @EstadoPartido,
-              -- Si la columna Estado existe, la actualizamos; si no existe se ignorará en ejecución si DB la tiene
-              Estado = @EstadoNum
-          WHERE IdPartido = @PartidoId
+      const participanteId = participanteResult.recordset[0].IdParticipante;
+
+      // Insertar todas las columnas de la fila (excepto "Participante")
+      for (const [campo, valor] of Object.entries(row)) {
+        if (campo === "Participante") continue;
+        if (valor === null || valor === "") continue;
+
+        let cleanCampo = campo.trim();
+        if (cleanCampo.endsWith("*")) {
+          cleanCampo = cleanCampo.slice(0, -1).trim();
+        }
+
+        const idPlantilla = plantillaMap[cleanCampo.toLowerCase()];
+        if (!idPlantilla) {
+          console.warn(`Campo no encontrado en plantilla: ${cleanCampo}`);
+          continue;
+        }
+
+        await pool
+          .request()
+          .input("partidoId", sql.Int, Number(partidoId))
+          .input("participanteId", sql.Int, participanteId)
+          .input("idPlantilla", sql.Int, idPlantilla)
+          .input("valor", sql.NVarChar, String(valor)).query(`
+          MERGE EstadisticasPartido AS target
+          USING (
+          SELECT @partidoId AS PartidoId, @participanteId AS ParticipanteId, @idPlantilla AS IdPlantilla
+          ) AS source
+          ON target.PartidoId = source.PartidoId
+            AND target.ParticipanteId = source.ParticipanteId
+            AND target.IdPlantilla = source.IdPlantilla
+          WHEN MATCHED THEN
+            UPDATE SET Valor = @valor, FechaRegistro = SYSDATETIME()
+          WHEN NOT MATCHED THEN
+            INSERT (PartidoId, ParticipanteId, IdPlantilla, Valor, FechaRegistro)
+            VALUES (@partidoId, @participanteId, @idPlantilla, @valor, SYSDATETIME());
         `);
-
-      await transaction.commit();
-
-      return NextResponse.json({
-        success: true,
-        inserted: insertCount,
-        missingParticipants,
-        message: "Estadísticas importadas y partido marcado como Finalizado",
-      });
-    } catch (txErr) {
-      await transaction.rollback();
-      console.error("Error en transacción al procesar Excel:", txErr);
-      return NextResponse.json(
-        { error: "Error al procesar e insertar estadísticas" },
-        { status: 500 }
-      );
+      }
     }
+    return NextResponse.json({
+      success: true,
+      message: "Estadísticas importadas correctamente",
+    });
   } catch (error) {
-    console.error("Error procesando Excel:", error);
+    console.error("Error importando estadísticas:", error);
     return NextResponse.json(
-      { error: "Error interno del servidor" },
+      { error: "Error interno del servidor al importar estadísticas" },
       { status: 500 }
     );
   }

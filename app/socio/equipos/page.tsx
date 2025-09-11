@@ -43,7 +43,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 interface Equipo {
   IdEquipo: number;
   Nombre: string;
-  Disciplina: string;
+  IdDeporte: number;
+  NombreDeporte: string;
   CapitanId: number;
   NombreCapitan: string;
   FechaCreacion: string;
@@ -77,17 +78,20 @@ export default function MisEquiposPage() {
   const [showIntegrantesDialog, setShowIntegrantesDialog] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [selectedEquipo, setSelectedEquipo] = useState<Equipo | null>(null);
+  const [deportes, setDeportes] = useState<
+    { IdDeporte: number; Nombre: string }[]
+  >([]);
 
   // Form states
   const [formData, setFormData] = useState({
     nombre: "",
-    disciplina: "",
+    idDeporte: 0,
     integrantes: [] as number[],
   });
 
   const [editFormData, setEditFormData] = useState({
     nombre: "",
-    disciplina: "",
+    idDeporte: 0,
   });
 
   const [selectedSociosToAdd, setSelectedSociosToAdd] = useState<number[]>([]);
@@ -128,9 +132,20 @@ export default function MisEquiposPage() {
         // Guardar user con IdSocio resuelto
         setCurrentUser({ ...user, socioId: socioData.IdSocio });
 
-        // Cargar equipos y socios disponibles
+        // Cargar equipos del socio
         fetchEquipos(socioData.IdSocio);
+
+        // Cargar socios disponibles
         fetchSocios();
+
+        // ✅ Cargar deportes
+        const deportesRes = await fetch("/api/deportes");
+        if (deportesRes.ok) {
+          const deportesData = await deportesRes.json();
+          setDeportes(deportesData);
+        } else {
+          console.error("No se pudieron cargar los deportes");
+        }
       } catch (err) {
         console.error("Error resolviendo socio:", err);
         toast({
@@ -213,10 +228,10 @@ export default function MisEquiposPage() {
   };
 
   const handleCreateEquipo = async () => {
-    if (!formData.nombre || !formData.disciplina) {
+    if (!formData.nombre || !formData.idDeporte) {
       toast({
         title: "Error",
-        description: "Nombre y disciplina son requeridos.",
+        description: "Nombre e idDeporte son requeridos.",
         variant: "destructive",
       });
       return;
@@ -230,7 +245,7 @@ export default function MisEquiposPage() {
         },
         body: JSON.stringify({
           nombre: formData.nombre,
-          disciplina: formData.disciplina,
+          idDeporte: formData.idDeporte,
           capitanId: currentUser.socioId,
           integrantes: formData.integrantes,
         }),
@@ -242,7 +257,8 @@ export default function MisEquiposPage() {
           description: "Equipo creado exitosamente.",
         });
         setShowCreateDialog(false);
-        setFormData({ nombre: "", disciplina: "", integrantes: [] });
+        // 🔎 Reset del formulario con idDeporte en 0
+        setFormData({ nombre: "", idDeporte: 0, integrantes: [] });
         fetchEquipos(currentUser.socioId);
       } else {
         const error = await response.json();
@@ -266,16 +282,16 @@ export default function MisEquiposPage() {
     setSelectedEquipo(equipo);
     setEditFormData({
       nombre: equipo.Nombre,
-      disciplina: equipo.Disciplina,
+      idDeporte: equipo.IdDeporte,
     });
     setShowEditDialog(true);
   };
 
   const handleUpdateEquipo = async () => {
-    if (!editFormData.nombre || !editFormData.disciplina || !selectedEquipo) {
+    if (!editFormData.nombre || !editFormData.idDeporte || !selectedEquipo) {
       toast({
         title: "Error",
-        description: "Nombre y disciplina son requeridos.",
+        description: "Nombre y Deporte son requeridos.",
         variant: "destructive",
       });
       return;
@@ -289,7 +305,7 @@ export default function MisEquiposPage() {
         },
         body: JSON.stringify({
           nombre: editFormData.nombre,
-          disciplina: editFormData.disciplina,
+          idDeporte: editFormData.idDeporte,
         }),
       });
 
@@ -513,23 +529,25 @@ export default function MisEquiposPage() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="disciplina">Disciplina</Label>
+                  <Label htmlFor="Deporte">Deporte</Label>
                   <Select
-                    value={formData.disciplina}
+                    value={formData.idDeporte.toString()}
                     onValueChange={(value) =>
-                      setFormData({ ...formData, disciplina: value })
+                      setFormData({ ...formData, idDeporte: Number(value) })
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecciona una disciplina" />
+                      <SelectValue placeholder="Selecciona un deporte" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Fútbol 5">Fútbol 5</SelectItem>
-                      <SelectItem value="Fútbol 11">Fútbol 11</SelectItem>
-                      <SelectItem value="Básquet">Básquet</SelectItem>
-                      <SelectItem value="Vóley">Vóley</SelectItem>
-                      <SelectItem value="Tenis">Tenis</SelectItem>
-                      <SelectItem value="Paddle">Paddle</SelectItem>
+                      {deportes.map((dep) => (
+                        <SelectItem
+                          key={dep.IdDeporte}
+                          value={dep.IdDeporte.toString()}
+                        >
+                          {dep.Nombre}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -575,23 +593,28 @@ export default function MisEquiposPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-disciplina">Disciplina</Label>
+                <Label htmlFor="edit-idDeporte">Deporte</Label>
                 <Select
-                  value={editFormData.disciplina}
+                  value={editFormData.idDeporte.toString()} // ✅ usar toString()
                   onValueChange={(value) =>
-                    setEditFormData({ ...editFormData, disciplina: value })
+                    setEditFormData({
+                      ...editFormData,
+                      idDeporte: Number(value),
+                    })
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecciona una disciplina" />
+                    <SelectValue placeholder="Selecciona un deporte" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Fútbol 5">Fútbol 5</SelectItem>
-                    <SelectItem value="Fútbol 11">Fútbol 11</SelectItem>
-                    <SelectItem value="Básquet">Básquet</SelectItem>
-                    <SelectItem value="Vóley">Vóley</SelectItem>
-                    <SelectItem value="Tenis">Tenis</SelectItem>
-                    <SelectItem value="Paddle">Paddle</SelectItem>
+                    {deportes.map((dep) => (
+                      <SelectItem
+                        key={dep.IdDeporte}
+                        value={dep.IdDeporte.toString()}
+                      >
+                        {dep.Nombre}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -767,7 +790,7 @@ export default function MisEquiposPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nombre</TableHead>
-                    <TableHead>Disciplina</TableHead>
+                    <TableHead>Deporte</TableHead>
                     <TableHead>Integrantes</TableHead>
                     <TableHead>Fecha Creación</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
@@ -780,7 +803,7 @@ export default function MisEquiposPage() {
                         {equipo.Nombre}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{equipo.Disciplina}</Badge>
+                        <Badge variant="outline">{equipo.NombreDeporte}</Badge>
                       </TableCell>
                       <TableCell>
                         {equipo.CantidadIntegrantes} miembros

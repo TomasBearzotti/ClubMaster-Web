@@ -74,7 +74,8 @@ import { useToast } from "@/hooks/use-toast";
 interface Torneo {
   IdTorneo: number;
   Nombre: string;
-  Disciplina: string;
+  IdDeporte: number;
+  NombreDeporte: string;
   FechaInicio: string;
   Estado: number;
   Participantes: number;
@@ -88,6 +89,7 @@ interface TorneoDetalle {
   IdTorneo: number;
   Nombre: string;
   Descripcion: string;
+  IdDeporte: number;
   NombreDeporte: string;
   FechaInicio: string;
   FechaFin: string;
@@ -169,7 +171,7 @@ export default function GestionTorneosPage() {
 
   const [formData, setFormData] = useState({
     nombre: "",
-    disciplina: "",
+    idDeporte: 0,
     fechaInicio: "",
     fechaFin: "",
     descripcion: "",
@@ -302,7 +304,7 @@ export default function GestionTorneosPage() {
   };
 
   const handleCreateTorneo = async () => {
-    if (!formData.nombre || !formData.disciplina || !formData.fechaInicio) {
+    if (!formData.nombre || !formData.idDeporte || !formData.fechaInicio) {
       toast({
         title: "Error",
         description: "Nombre, disciplina y fecha de inicio son requeridos.",
@@ -320,7 +322,7 @@ export default function GestionTorneosPage() {
         },
         body: JSON.stringify({
           nombre: formData.nombre,
-          disciplina: formData.disciplina,
+          idDeporte: formData.idDeporte,
           fechaInicio: formData.fechaInicio,
           fechaFin: formData.fechaFin || null,
           descripcion: formData.descripcion || null,
@@ -339,7 +341,7 @@ export default function GestionTorneosPage() {
         setShowCreateDialog(false);
         setFormData({
           nombre: "",
-          disciplina: "",
+          idDeporte: 0,
           fechaInicio: "",
           fechaFin: "",
           descripcion: "",
@@ -475,7 +477,7 @@ export default function GestionTorneosPage() {
         const nombreMatch =
           torneo.Nombre?.toLowerCase().includes(busquedaLower) || false;
         const deporteMatch =
-          torneo.Disciplina?.toLowerCase().includes(busquedaLower) || false;
+          torneo.NombreDeporte?.toLowerCase().includes(busquedaLower) || false;
         if (!nombreMatch && !deporteMatch) {
           return false;
         }
@@ -492,16 +494,15 @@ export default function GestionTorneosPage() {
 
       // Filtro por deporte
       if (
-        filtros.deporte &&
         filtros.deporte !== "all" &&
-        torneo.Disciplina !== filtros.deporte
+        torneo.NombreDeporte !== filtros.deporte
       ) {
         return false;
       }
 
       // Filtro por tipo de participación
       if (filtros.tipoParticipacion && filtros.tipoParticipacion !== "all") {
-        const tipoTorneo = getTipoParticipacion(torneo.Disciplina);
+        const tipoTorneo = getTipoParticipacion(torneo.NombreDeporte);
         if (
           filtros.tipoParticipacion !== "all" &&
           tipoTorneo !== filtros.tipoParticipacion
@@ -666,21 +667,21 @@ export default function GestionTorneosPage() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="disciplina">Disciplina</Label>
+                    <Label htmlFor="idDeporte">Deporte</Label>
                     <Select
-                      value={formData.disciplina}
+                      value={formData.idDeporte.toString()}
                       onValueChange={(value) =>
-                        setFormData({ ...formData, disciplina: value })
+                        setFormData({ ...formData, idDeporte: Number(value) })
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecciona una disciplina" />
+                        <SelectValue placeholder="Selecciona un deporte" />
                       </SelectTrigger>
                       <SelectContent>
                         {deportes.map((deporte) => (
                           <SelectItem
                             key={deporte.IdDeporte}
-                            value={deporte.Nombre}
+                            value={deporte.IdDeporte.toString()}
                           >
                             {deporte.Nombre}
                           </SelectItem>
@@ -866,7 +867,7 @@ export default function GestionTorneosPage() {
                           {torneo.Nombre}
                         </CardTitle>
                         <CardDescription className="flex items-center gap-4">
-                          <span>{torneo.Disciplina}</span>
+                          <span>{torneo.NombreDeporte}</span>
                           <span>•</span>
                           <span>
                             {format(new Date(torneo.FechaInicio), "dd/MM/yyyy")}

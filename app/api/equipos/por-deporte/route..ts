@@ -18,20 +18,22 @@ export async function GET(request: NextRequest) {
     // 🔎 Equipos por disciplina con capitán desde Personas
     const equiposResult = await pool
       .request()
-      .input("disciplina", sql.NVarChar, deporteId).query(`
+      .input("deporteId", sql.Int, Number(deporteId)).query(`
         SELECT 
           e.IdEquipo,
           e.Nombre,
-          e.Disciplina,
-          CONCAT(p.Nombre, ' ', p.Apellido) AS Capitan,
+          e.IdDeporte,
+          d.Nombre AS NombreDeporte,
+        CONCAT(p.Nombre, ' ', p.Apellido) AS Capitan,
           e.FechaCreacion,
-          COUNT(ie.SocioId) AS TotalIntegrantes
+        COUNT(ie.SocioId) AS TotalIntegrantes
         FROM Equipos e
+        INNER JOIN Deportes d ON e.IdDeporte = d.IdDeporte
         INNER JOIN Socios s ON e.CapitanId = s.IdSocio
         INNER JOIN Personas p ON s.IdPersona = p.IdPersona
         LEFT JOIN IntegrantesEquipo ie ON e.IdEquipo = ie.EquipoId
-        WHERE e.Disciplina = @disciplina
-        GROUP BY e.IdEquipo, e.Nombre, e.Disciplina, p.Nombre, p.Apellido, e.FechaCreacion
+        WHERE e.IdDeporte = @deporteId
+        GROUP BY e.IdEquipo, e.Nombre, e.IdDeporte, d.Nombre, p.Nombre, p.Apellido, e.FechaCreacion
         ORDER BY e.Nombre
       `);
 

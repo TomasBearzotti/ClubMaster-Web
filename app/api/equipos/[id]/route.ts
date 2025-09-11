@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getConnection, sql } from "@/lib/sql-server";
+import { pool } from "mssql";
 
 // GET -> obtener un equipo específico
 export async function GET(
@@ -22,17 +23,19 @@ export async function GET(
         SELECT 
           e.IdEquipo,
           e.Nombre,
-          e.Disciplina,
+          e.IdDeporte,
+          d.Nombre AS NombreDeporte,
           e.CapitanId,
-          CONCAT(p.Nombre, ' ', p.Apellido) AS NombreCapitan,
+        CONCAT(p.Nombre, ' ', p.Apellido) AS NombreCapitan,
           e.FechaCreacion,
-          COUNT(ie.SocioId) AS CantidadIntegrantes
+        COUNT(ie.SocioId) AS CantidadIntegrantes
         FROM Equipos e
+        INNER JOIN Deportes d ON e.IdDeporte = d.IdDeporte
         INNER JOIN Socios s ON e.CapitanId = s.IdSocio
         INNER JOIN Personas p ON s.IdPersona = p.IdPersona
         LEFT JOIN IntegrantesEquipo ie ON e.IdEquipo = ie.EquipoId
         WHERE e.IdEquipo = @equipoId
-        GROUP BY e.IdEquipo, e.Nombre, e.Disciplina, e.CapitanId, p.Nombre, p.Apellido, e.FechaCreacion
+        GROUP BY e.IdEquipo, e.Nombre, e.IdDeporte, d.Nombre, e.CapitanId, p.Nombre, p.Apellido, e.FechaCreacion
       `);
 
     if (result.recordset.length === 0) {
@@ -52,38 +55,31 @@ export async function GET(
   }
 }
 
-// PUT -> actualizar equipo
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     const equipoId = Number(params.id);
-    const { nombre, disciplina } = await request.json();
+    const { nombre, idDeporte } = await request.json();
 
-    if (isNaN(equipoId)) {
+    if (!nombre || !idDeporte) {
       return NextResponse.json(
-        { error: "ID de equipo inválido" },
+        { error: "Nombre e idDeporte son requeridos" },
         { status: 400 }
       );
     }
 
-    if (!nombre || !disciplina) {
-      return NextResponse.json(
-        { error: "Nombre y disciplina son requeridos" },
-        { status: 400 }
-      );
-    }
-
+    // ✅ Obtener la conexión
     const pool = await getConnection();
 
     const result = await pool
       .request()
       .input("equipoId", sql.Int, equipoId)
       .input("nombre", sql.NVarChar, nombre)
-      .input("disciplina", sql.NVarChar, disciplina).query(`
+      .input("idDeporte", sql.Int, idDeporte).query(`
         UPDATE Equipos
-        SET Nombre = @nombre, Disciplina = @disciplina
+        SET Nombre = @nombre, IdDeporte = @idDeporte
         WHERE IdEquipo = @equipoId
       `);
 

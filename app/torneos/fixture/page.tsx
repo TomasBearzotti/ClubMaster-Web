@@ -63,7 +63,8 @@ import { es } from "date-fns/locale";
 interface Torneo {
   IdTorneo: number;
   Nombre: string;
-  Disciplina: string;
+  IdDeporte: number;
+  NombreDeporte: string;
   FechaInicio: string;
   FechaFin?: string;
   Estado: number;
@@ -492,7 +493,7 @@ export default function GenerarFixturePage() {
                             key={torneo.IdTorneo}
                             value={torneo.IdTorneo.toString()}
                           >
-                            {torneo.Nombre} - {torneo.Disciplina} (
+                            {torneo.Nombre} - {torneo.NombreDeporte} (
                             {torneo.Participantes} participantes)
                           </SelectItem>
                         ))}
@@ -509,7 +510,7 @@ export default function GenerarFixturePage() {
                             {selectedTorneo.Nombre}
                           </h3>
                           <p className="text-yellow-800">
-                            Disciplina: {selectedTorneo.Disciplina}
+                            Deporte: {selectedTorneo.NombreDeporte}
                           </p>
                           <div className="grid grid-cols-2 gap-2 mt-2">
                             <div className="flex items-center gap-1 text-sm">

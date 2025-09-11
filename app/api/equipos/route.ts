@@ -11,12 +11,14 @@ export async function GET(request: NextRequest) {
       SELECT 
         e.IdEquipo,
         e.Nombre,
-        e.Disciplina,
+        e.IdDeporte,
+        d.Nombre AS NombreDeporte,
         e.CapitanId,
         CONCAT(p.Nombre, ' ', p.Apellido) as NombreCapitan,
         e.FechaCreacion,
         COUNT(ie.SocioId) as CantidadIntegrantes
       FROM Equipos e
+      INNER JOIN Deportes d ON e.IdDeporte = d.IdDeporte
       INNER JOIN Socios s ON e.CapitanId = s.IdSocio
       INNER JOIN Personas p ON s.IdPersona = p.IdPersona
       LEFT JOIN IntegrantesEquipo ie ON e.IdEquipo = ie.EquipoId
@@ -31,7 +33,8 @@ export async function GET(request: NextRequest) {
     }
 
     query += `
-      GROUP BY e.IdEquipo, e.Nombre, e.Disciplina, e.CapitanId, p.Nombre, p.Apellido, e.FechaCreacion
+      GROUP BY e.IdEquipo, e.Nombre, e.IdDeporte, d.Nombre,
+              e.CapitanId, p.Nombre, p.Apellido, e.FechaCreacion
       ORDER BY e.FechaCreacion DESC
     `;
 
@@ -48,11 +51,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { nombre, disciplina, capitanId, integrantes } = await request.json();
+    const { nombre, idDeporte, capitanId, integrantes } = await request.json();
 
-    if (!nombre || !disciplina || !capitanId) {
+    if (!nombre || !idDeporte || !capitanId) {
       return NextResponse.json(
-        { error: "Nombre, disciplina y capitán son requeridos" },
+        { error: "Nombre, idDeporte y capitán son requeridos" },
         { status: 400 }
       );
     }
@@ -96,12 +99,12 @@ export async function POST(request: NextRequest) {
     const equipoResult = await pool
       .request()
       .input("nombre", sql.NVarChar, nombre)
-      .input("disciplina", sql.NVarChar, disciplina)
+      .input("idDeporte", sql.Int, idDeporte)
       .input("capitanId", sql.Int, capitanId)
       .input("fechaCreacion", sql.DateTime2, new Date()).query(`
-        INSERT INTO Equipos (Nombre, Disciplina, CapitanId, FechaCreacion)
+        INSERT INTO Equipos (Nombre, IdDeporte, CapitanId, FechaCreacion)
         OUTPUT INSERTED.IdEquipo
-        VALUES (@nombre, @disciplina, @capitanId, @fechaCreacion)
+        VALUES (@nombre, @idDeporte, @capitanId, @fechaCreacion)
       `);
 
     const equipoId = equipoResult.recordset[0].IdEquipo;

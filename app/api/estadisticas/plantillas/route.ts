@@ -1,63 +1,45 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getConnection, sql } from "@/lib/sql-server";
 
 export async function POST(request: NextRequest) {
-  //console.log("=== API Plantillas POST ===");
-
   try {
     const body = await request.json();
-    //console.log("Request body:", body);
+    const IdDeporte = Number(body.IdDeporte);
 
-    const { deporteId } = body;
-
-    if (!deporteId) {
-      console.error("deporteId es requerido");
+    if (isNaN(IdDeporte) || IdDeporte <= 0) {
       return NextResponse.json(
-        { error: "deporteId es requerido" },
+        { error: "Se requiere un IdDeporte válido" },
         { status: 400 }
       );
     }
 
-    //console.log("deporteId recibido:", deporteId, "tipo:", typeof deporteId);
-
     const pool = await getConnection();
 
-    const plantillaResult = await pool
-      .request()
-      .input("deporteId", sql.Int, deporteId).query(`
-        SELECT NombreCampo, TipoDato, EsObligatorio, Orden
+    const result = await pool.request().input("IdDeporte", sql.Int, IdDeporte)
+      .query(`
+        SELECT IdPlantilla, NombreCampo, TipoDato, EsObligatorio, Orden
         FROM PlantillasEstadisticas
-        WHERE IdDeporte = @deporteId
+        WHERE IdDeporte = @IdDeporte
         ORDER BY Orden
       `);
 
-    // console.log("Resultado plantilla:", plantillaResult.recordset);
-
-    const plantilla = plantillaResult.recordset;
-
-    // Generar estructura de plantilla Excel
-    const plantillaExcel = {
-      headers: ["Participante", "Tipo", ...plantilla.map((p) => p.NombreCampo)],
-      campos: plantilla,
-      instrucciones: [
-        "Complete los datos de estadísticas para cada participante",
-        'Tipo: "Equipo" o "Individual"',
-        "Deje en blanco los campos que no apliquen",
-        "Los campos marcados como obligatorios deben completarse",
-      ],
-    };
-
-    //console.log("Respuesta generada:", plantillaExcel);
+    if (result.recordset.length === 0) {
+      return NextResponse.json(
+        {
+          error: `No se encontraron campos de plantilla para el deporte con Id ${IdDeporte}`,
+        },
+        { status: 404 }
+      );
+    }
 
     return NextResponse.json({
-      success: true,
-      plantilla: plantillaExcel,
-      message: "Plantilla generada correctamente",
+      IdDeporte,
+      campos: result.recordset,
     });
   } catch (error) {
-    console.error("Error generating template:", error);
+    console.error("Error obteniendo plantilla:", error);
     return NextResponse.json(
-      { error: "Error al generar plantilla" },
+      { error: "Error interno del servidor al obtener la plantilla" },
       { status: 500 }
     );
   }

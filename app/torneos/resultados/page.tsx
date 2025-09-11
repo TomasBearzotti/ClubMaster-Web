@@ -54,7 +54,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 interface Torneo {
   IdTorneo: number;
   Nombre: string;
-  Disciplina: string;
+  IdDeporte: number;
+  NombreDeporte: string;
   FechaInicio: string;
   Estado: number;
   Participantes: number;
@@ -380,7 +381,7 @@ export default function CargarResultadosPage() {
                         key={torneo.IdTorneo}
                         value={torneo.IdTorneo.toString()}
                       >
-                        {torneo.Nombre} - {torneo.Disciplina}
+                        {torneo.Nombre} - {torneo.NombreDeporte}
                       </SelectItem>
                     ))}
                   </SelectContent>

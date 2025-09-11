@@ -59,8 +59,11 @@ interface PartidoDetalle {
   IdPartido: number;
   IdTorneo: number;
   TorneoNombre: string;
-  Disciplina: string;
+  IdDeporte: number;
+  NombreDeporte: string;
   FechaHora?: string;
+  ParticipanteAId: number;
+  ParticipanteBId: number;
   ParticipanteA: string;
   ParticipanteB: string;
   Fase: string;
@@ -145,8 +148,8 @@ export default function PartidoDetallePage() {
             body: JSON.stringify({ estado: "finalizado" }),
           });
 
-          // Actualizar en el estado local
-          +setPartido((prev) =>
+          // ✅ Corregido: sin el "+"
+          setPartido((prev) =>
             prev ? { ...prev, EstadoPartido: "finalizado" } : prev
           );
         }
@@ -162,11 +165,9 @@ export default function PartidoDetallePage() {
       const response = await fetch("/api/estadisticas/plantillas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          deporteId: partido.IdTorneo, // o el IdDeporte correspondiente
-          partidoId: partido.IdPartido,
-        }),
+        body: JSON.stringify({ IdDeporte: partido.IdDeporte }),
       });
+
       if (response.ok) {
         const data = await response.json();
         console.log("Plantilla:", data);
@@ -413,7 +414,7 @@ export default function PartidoDetallePage() {
             {partido.ParticipanteA} vs {partido.ParticipanteB}
           </h2>
           <p className="text-gray-600">
-            {partido.TorneoNombre} - {partido.Disciplina}
+            {partido.TorneoNombre} - {partido.NombreDeporte}
           </p>
         </div>
 
@@ -444,49 +445,25 @@ export default function PartidoDetallePage() {
               </CardHeader>
               <CardContent>
                 {/* Resultado */}
-                {(() => {
-                  const normalize = (s: string) =>
-                    (s ?? "").toString().trim().toLowerCase();
-                  const SCORE_FIELDS = [
-                    "sets ganados",
-                    "goles",
-                    "puntos",
-                    "score",
-                    "tantos",
-                  ];
+                {estadisticas.length > 0 &&
+                  partido &&
+                  (() => {
+                    // El primer campo de la plantilla corresponde al resultado (Sets Ganados, Goles, Puntos, etc.)
+                    const primerCampo = estadisticas[0]?.NombreCampo;
 
-                  const getScoreFromStats = (participantName: string) => {
-                    const target = normalize(participantName);
-
-                    // Buscar primero en campos conocidos
-                    for (const field of SCORE_FIELDS) {
+                    // Buscar el valor del primer campo para cada participante por ID
+                    const getResultado = (participanteId: number) => {
                       const row = estadisticas.find(
                         (s) =>
-                          normalize(s.ParticipanteNombre) === target &&
-                          normalize(s.NombreCampo).includes(field)
+                          s.ParticipanteId === participanteId &&
+                          s.NombreCampo === primerCampo
                       );
-                      if (row && !Number.isNaN(parseFloat(row.Valor))) {
-                        return parseFloat(row.Valor);
-                      }
-                    }
+                      return row ? Number(row.Valor) : 0;
+                    };
 
-                    // Fallback: si no hay campo conocido, pero hay un solo numérico, usarlo
-                    const numericRows = estadisticas.filter(
-                      (s) =>
-                        normalize(s.ParticipanteNombre) === target &&
-                        !Number.isNaN(parseFloat(s.Valor))
-                    );
-                    if (numericRows.length === 1) {
-                      return parseFloat(numericRows[0].Valor);
-                    }
+                    const a = getResultado(partido.ParticipanteAId);
+                    const b = getResultado(partido.ParticipanteBId);
 
-                    return undefined;
-                  };
-
-                  const a = getScoreFromStats(partido.ParticipanteA);
-                  const b = getScoreFromStats(partido.ParticipanteB);
-
-                  if (typeof a === "number" && typeof b === "number") {
                     return (
                       <div className="text-center mb-6">
                         <div className="text-4xl font-bold text-blue-600 mb-2">
@@ -495,9 +472,7 @@ export default function PartidoDetallePage() {
                         <p className="text-gray-600">Resultado Final</p>
                       </div>
                     );
-                  }
-                  return null;
-                })()}
+                  })()}
                 {/* Información del Partido */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="text-center">
