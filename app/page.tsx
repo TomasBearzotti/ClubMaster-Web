@@ -23,6 +23,9 @@ import {
   TestTube,
   User,
   Shield,
+  UserCog,
+  DollarSign,
+  Trophy,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -51,7 +54,51 @@ const HARDCODED_TEST_USERS = [
     role: "Socio",
     description: "Socio del club",
   },
+  {
+    email: "tesorero@clubmaster.com",
+    password: "123456",
+    displayName: "Tesorero",
+    role: "Tesorero",
+    description: "Tesorero del club",
+  },
+  {
+    email: "responsable.deporte@clubmaster.com",
+    password: "123456",
+    displayName: "Responsable de Deporte",
+    role: "Responsable de Deporte",
+    description: "Responsable de la gestión deportiva",
+  },
+  {
+    email: "canterle.arbitro@arbitro.com",
+    password: "123456",
+    displayName: "Arbitro Canterle",
+    role: "Arbitro",
+    description: "Arbitro del club",
+  },
 ];
+
+const PERM_TO_ROUTE: Record<string, string> = {
+  DASHBOARD_ADMIN: "/dashboard",
+  DASHBOARD_SOCIOS: "/socio-dashboard",
+  DASHBOARD_ARBITRO: "/arbitro-dashboard",
+};
+
+const norm = (s: string) =>
+  (s ?? "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toUpperCase();
+
+function pickDashboardRoute(permisos: any[]): string | null {
+  const names = (permisos ?? []).map((p) =>
+    norm(p?.PermisoNombre ?? p?.nombre ?? p?.Nombre ?? "")
+  );
+  if (names.includes("DASHBOARD_ADMIN")) return PERM_TO_ROUTE.DASHBOARD_ADMIN;
+  if (names.includes("DASHBOARD_SOCIO")) return PERM_TO_ROUTE.DASHBOARD_SOCIOS;
+  if (names.includes("DASHBOARD_ARBITRO"))
+    return PERM_TO_ROUTE.DASHBOARD_ARBITRO;
+  return null;
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -68,33 +115,107 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const response = await fetch("/api/auth/login", {
+      // 1) login
+      const response = await fetch("/api/seguridad/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-
       const data = await response.json();
 
-      if (response.ok && data.success) {
-        // Guardar datos del usuario en localStorage
-        localStorage.setItem("user", JSON.stringify(data.user));
-
-        // Redirigir según el rol
-        if (data.user.idRol === 1) {
-          router.push("/dashboard");
-        } else if (data.user.idRol === 2) {
-          router.push("/socio-dashboard");
-        } else {
-          setError("Rol de usuario no válido");
-        }
-      } else {
-        setError(data.error || "Error al iniciar sesión");
+      if (!response.ok || !data?.success) {
+        setError(data?.error || "Error al iniciar sesión");
+        return;
       }
-    } catch (error) {
-      console.error("Error en login:", error);
+
+      const user = data.user ?? {};
+      const userId: number | null = user.id ?? user.IdUsuario ?? null;
+      const userEmail: string = user.email ?? email;
+      let userEstado: number | undefined = user.estadoUsuario;
+      let userRolId: number | null =
+        user.idRol ?? user.rolId ?? user.roles?.[0]?.idRol ?? null;
+
+      // 2) si faltan estado/rol, buscamos el usuario del API de usuarios
+      if (userEstado === undefined || userRolId == null) {
+        const uRes = await fetch("/api/seguridad/usuarios", {
+          cache: "no-store",
+        });
+        const uList = (await uRes.json()) as any[];
+        const match =
+          uList.find((u) =>
+            userId ? u.id === userId : u.email === userEmail
+          ) ?? null;
+        if (match) {
+          userEstado = match.estadoUsuario;
+          userRolId =
+            userRolId ??
+            match.roles?.[0]?.idRol ??
+            match.roles?.[0]?.IdRol ??
+            null;
+        }
+      }
+
+      // 3) validar estado del usuario
+      if (userEstado !== 1) {
+        const msg =
+          userEstado === 2
+            ? "Tu cuenta está pendiente de aprobación."
+            : "Tu cuenta está inactiva.";
+        setError(msg);
+        return;
+      }
+
+      // 4) buscar rol y validar estado + permisos
+      const rolesRes = await fetch("/api/seguridad/roles", {
+        cache: "no-store",
+      });
+      if (!rolesRes.ok) throw new Error("No se pudieron obtener roles");
+      const rolesData = await rolesRes.json();
+
+      const role = rolesData
+        .map((r: any) => ({
+          id: r.IdRol ?? r.id,
+          nombre: r.Nombre ?? r.nombre,
+          estadoRol: r.EstadoRol ?? r.estadoRol ?? 0,
+          permisos: (r.Permisos ?? r.permisos ?? []).map((p: any) => ({
+            idPermiso: p.IdPermiso ?? p.idPermiso ?? p.id,
+            PermisoNombre: p.PermisoNombre ?? p.nombre ?? p.Nombre,
+            descripcion: p.PermisoDescripcion ?? p.descripcion ?? p.Descripcion,
+          })),
+        }))
+        .find((r: any) => r.id === userRolId);
+
+      if (!role) {
+        setError("No se encontró tu rol en el sistema.");
+        return;
+      }
+      if (role.estadoRol !== 1) {
+        setError("Tu rol está inactivo. Contactá a un administrador.");
+        return;
+      }
+
+      const route = pickDashboardRoute(role.permisos);
+      if (!route) {
+        setError(
+          "Tu rol no tiene permisos de dashboard asignados. Contactá a un administrador."
+        );
+        return;
+      }
+
+      // 5) persistir y redirigir
+      localStorage.setItem(
+        "user",
+        JSON.stringify({
+          ...user,
+          estadoUsuario: userEstado,
+          idRol: userRolId,
+        })
+      );
+      localStorage.setItem("role", JSON.stringify(role));
+
+      router.push(route);
+    } catch (err) {
+      console.error("Error en login:", err);
       setError("Error de conexión. Intenta nuevamente.");
     } finally {
       setLoading(false);
@@ -107,30 +228,69 @@ export default function LoginPage() {
     setShowTestUsersDialog(false);
   };
 
-  const getRoleBadge = (role: string) => {
-    switch (role) {
-      case "Administrador":
-        return (
-          <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
-            <Shield className="w-3 h-3 mr-1" />
-            {role}
-          </Badge>
-        );
-      case "Socio":
-        return (
-          <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
-            <User className="w-3 h-3 mr-1" />
-            {role}
-          </Badge>
-        );
-      default:
-        return (
-          <Badge variant="secondary">
-            <User className="w-3 h-3 mr-1" />
-            {role}
-          </Badge>
-        );
+  // Normaliza: quita acentos, baja a minúsculas y colapsa espacios
+  const norm = (s?: string) =>
+    (s ?? "")
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const getRoleBadge = (roleRaw?: string) => {
+    const key = norm(roleRaw);
+
+    if (!key) return <Badge variant="secondary">Sin rol</Badge>;
+
+    // Aceptamos variantes/sinónimos
+    if (["administrador general", "administrador", "admin"].includes(key)) {
+      return (
+        <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
+          <Shield className="w-3 h-3 mr-1" /> {roleRaw}
+        </Badge>
+      );
     }
+
+    if (key === "socio") {
+      return (
+        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+          <User className="w-3 h-3 mr-1" /> {roleRaw}
+        </Badge>
+      );
+    }
+
+    if (key === "arbitro") {
+      return (
+        <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">
+          <UserCog className="w-3 h-3 mr-1" /> {roleRaw}
+        </Badge>
+      );
+    }
+
+    if (key === "tesorero") {
+      return (
+        <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+          <DollarSign className="w-3 h-3 mr-1" /> {roleRaw}
+        </Badge>
+      );
+    }
+
+    if (
+      [
+        "responsable de deportes",
+        "responsable deportes",
+        "responsable de deporte",
+      ].includes(key)
+    ) {
+      return (
+        <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">
+          <Trophy className="w-3 h-3 mr-1" /> {roleRaw}
+        </Badge>
+      );
+    }
+
+    // Fallback para roles desconocidos
+    return <Badge variant="secondary">{roleRaw}</Badge>;
   };
 
   return (
