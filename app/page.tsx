@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 
-// 🔧 USUARIOS HARDCODEADOS PARA PRUEBAS - EDITA AQUÍ TUS USUARIOS
+// 🔧 USUARIOS HARDCODEADOS PARA PRUEBAS
 const HARDCODED_TEST_USERS = [
   {
     email: "admin@clubmaster.com",
@@ -202,17 +202,7 @@ export default function LoginPage() {
         return;
       }
 
-      // 5) persistir y redirigir
-      localStorage.setItem(
-        "user",
-        JSON.stringify({
-          ...user,
-          estadoUsuario: userEstado,
-          idRol: userRolId,
-        })
-      );
-      localStorage.setItem("role", JSON.stringify(role));
-
+      // 5) redirigir
       router.push(route);
     } catch (err) {
       console.error("Error en login:", err);

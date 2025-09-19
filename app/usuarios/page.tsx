@@ -144,6 +144,7 @@ export async function createUsuario(
 
 export default function UsuariosPage() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
   const [searchUser, setSearchUser] = useState("");
   const [searchRole, setSearchRole] = useState("");
   const [editingRol, setEditingRol] = useState<any | null>(null);
@@ -167,9 +168,15 @@ export default function UsuariosPage() {
   });
 
   useEffect(() => {
-    fetchPermisos();
-    fetchRoles();
-    fetchUsuarios();
+    const init = async () => {
+      try {
+        await Promise.all([fetchPermisos(), fetchRoles(), fetchUsuarios()]);
+        setLoading(false);
+      } catch (err) {
+        console.error("❌ Error inicializando UsuariosPage:", err);
+      }
+    };
+    init();
   }, []);
 
   // Usuarios

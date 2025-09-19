@@ -35,6 +35,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
+  const [permisos, setPermisos] = useState<string[]>([]);
   const [stats, setStats] = useState<EstadisticasDashboard>({
     totalSocios: 0,
     sociosActivos: 0,
@@ -48,27 +49,31 @@ export default function DashboardPage() {
   });
 
   useEffect(() => {
-    const userData = localStorage.getItem("user");
-    if (!userData) {
-      router.push("/");
-      return;
-    }
+    const init = async () => {
+      try {
+        const res = await fetch("/api/seguridad/roles/logged", {
+          cache: "no-store",
+          credentials: "include",
+        });
+        if (res.ok) {
+          const role = await res.json();
+          const permisosArray = (role.permisos ?? []).map((p: any) =>
+            p.nombre?.toUpperCase()
+          );
+          setPermisos(permisosArray);
+        }
 
-    const user = JSON.parse(userData);
+        // cargar estadísticas
+        await fetchDashboardStats();
+      } catch (err) {
+        console.error("Error inicializando dashboard:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    switch (user.idRol) {
-      case 2:
-        router.push("/socio-dashboard");
-        return;
-      case 3:
-        router.push("/arbitro-dashboard");
-        return;
-      default:
-        break;
-    }
-
-    fetchDashboardStats();
-  }, [router]);
+    init();
+  }, []);
 
   const fetchDashboardStats = async () => {
     setLoading(true);
@@ -135,9 +140,14 @@ export default function DashboardPage() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("user");
-    router.push("/");
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/seguridad/logout", { method: "POST" });
+      router.push("/");
+    } catch (err) {
+      console.error("Error al cerrar sesión:", err);
+      router.push("/");
+    }
   };
 
   if (loading) {
@@ -281,108 +291,116 @@ export default function DashboardPage() {
 
         {/* Sección de Módulos */}
         <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Card
-            className="hover:shadow-lg transition-shadow cursor-pointer"
-            onClick={() => router.push("/usuarios")}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-semibold">
-                Gestión de Usuarios
-              </CardTitle>
-              <Users className="h-6 w-6 text-indigo-600" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Administra las cuentas de acceso y roles de los usuarios del
-                sistema.
-              </p>
-            </CardContent>
-          </Card>
-          <Card
-            className="hover:shadow-lg transition-shadow cursor-pointer"
-            onClick={() => router.push("/socios")}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-semibold">
-                Gestión de Socios
-              </CardTitle>
-              <Users className="h-6 w-6 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Administra la información de los miembros del club.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card
-            className="hover:shadow-lg transition-shadow cursor-pointer"
-            onClick={() => router.push("/cuotas")}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-semibold">
-                Gestión de Cuotas
-              </CardTitle>
-              <CreditCard className="h-6 w-6 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Controla pagos, genera cuotas y gestiona el estado financiero.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card
-            className="hover:shadow-lg transition-shadow cursor-pointer"
-            onClick={() => router.push("/torneos")}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-semibold">
-                Gestión de Torneos
-              </CardTitle>
-              <Trophy className="h-6 w-6 text-yellow-600" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Organiza, inscribe participantes y gestiona resultados de
-                torneos.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card
-            className="hover:shadow-lg transition-shadow cursor-pointer"
-            onClick={() => router.push("/arbitros")}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-semibold">
-                Gestión de Árbitros
-              </CardTitle>
-              <UserCheck className="h-6 w-6 text-purple-600" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Administra árbitros, su disponibilidad y asignaciones.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card
-            className="hover:shadow-lg transition-shadow cursor-pointer"
-            onClick={() => router.push("/reportes")}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-semibold">
-                Reportes y Estadísticas
-              </CardTitle>
-              <ClipboardList className="h-6 w-6 text-red-600" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Accede a informes detallados sobre el club.
-              </p>
-            </CardContent>
-          </Card>
+          {permisos.includes("GESTION_USUARIOS") && (
+            <Card
+              className="hover:shadow-lg transition-shadow cursor-pointer"
+              onClick={() => router.push("/usuarios")}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-lg font-semibold">
+                  Gestión de Usuarios
+                </CardTitle>
+                <Users className="h-6 w-6 text-indigo-600" />
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Administra las cuentas de acceso y roles de los usuarios del
+                  sistema.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          {permisos.includes("GESTION_SOCIOS") && (
+            <Card
+              className="hover:shadow-lg transition-shadow cursor-pointer"
+              onClick={() => router.push("/socios")}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-lg font-semibold">
+                  Gestión de Socios
+                </CardTitle>
+                <Users className="h-6 w-6 text-blue-600" />
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Administra la información de los miembros del club.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          {permisos.includes("GESTION_CUOTAS") && (
+            <Card
+              className="hover:shadow-lg transition-shadow cursor-pointer"
+              onClick={() => router.push("/cuotas")}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-lg font-semibold">
+                  Gestión de Cuotas
+                </CardTitle>
+                <CreditCard className="h-6 w-6 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Controla pagos, genera cuotas y gestiona el estado financiero.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          {permisos.includes("GESTION_TORNEOS") && (
+            <Card
+              className="hover:shadow-lg transition-shadow cursor-pointer"
+              onClick={() => router.push("/torneos")}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-lg font-semibold">
+                  Gestión de Torneos
+                </CardTitle>
+                <Trophy className="h-6 w-6 text-yellow-600" />
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Organiza, inscribe participantes y gestiona resultados de
+                  torneos.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          {permisos.includes("GESTION_ARBITROS") && (
+            <Card
+              className="hover:shadow-lg transition-shadow cursor-pointer"
+              onClick={() => router.push("/arbitros")}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-lg font-semibold">
+                  Gestión de Árbitros
+                </CardTitle>
+                <UserCheck className="h-6 w-6 text-purple-600" />
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Administra árbitros, su disponibilidad y asignaciones.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          {permisos.includes("REPORTES") && (
+            <Card
+              className="hover:shadow-lg transition-shadow cursor-pointer"
+              onClick={() => router.push("/reportes")}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-lg font-semibold">
+                  Reportes y Estadísticas
+                </CardTitle>
+                <ClipboardList className="h-6 w-6 text-red-600" />
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Accede a informes detallados sobre el club.
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </section>
       </main>
     </div>
