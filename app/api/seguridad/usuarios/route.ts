@@ -83,19 +83,10 @@ export async function GET() {
 // ✅ POST - Crear usuario
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, idPersona, idRol, estado } = await req.json();
-
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: "Email y password son obligatorios" },
-        { status: 400 }
-      );
-    }
-
+    const { email, password, idRol, idPersona, estado } = await req.json();
     const pool = await getConnection();
     const hash = await bcrypt.hash(password, 10);
-
-    await pool
+    const result = await pool
       .request()
       .input("email", sql.NVarChar, email)
       .input("hash", sql.NVarChar, hash)
@@ -103,85 +94,89 @@ export async function POST(req: NextRequest) {
       .input("idRol", sql.Int, idRol || null)
       .input("estado", sql.Int, estado ?? 1).query(`
         INSERT INTO Usuarios (Email, ContrasenaHash, IdPersona, IdRol, EstadoUsuario)
-        VALUES (@email, @hash, @idPersona, @idRol, @estado)
+        VALUES (@email, @hash, @idPersona, @idRol, @estado);
+        SELECT SCOPE_IDENTITY() AS IdUsuario;
       `);
 
-    return NextResponse.json({ success: true, message: "Usuario creado" });
+    const idUsuario = result.recordset[0].IdUsuario;
+
+    if (idRol === 2) {
+      // Socio
+      await pool
+        .request()
+        .input("idPersona", sql.Int, idPersona)
+        .input("usuarioId", sql.Int, idUsuario)
+        .input("estado", sql.Int, 1).query(`
+    INSERT INTO Socios (IdPersona, UsuarioId, Estado, TipoMembresiaId)
+    VALUES (@idPersona, @usuarioId, @estado, 1)
+  `);
+    }
+
+    if (idRol === 3) {
+      // Árbitro
+      await pool
+        .request()
+        .input("idPersona", sql.Int, idPersona)
+        .input("estado", sql.Int, 1).query(`
+          INSERT INTO Arbitros (IdPersona, Estado)
+          VALUES (@idPersona, @estado)
+        `);
+    }
+
+    return NextResponse.json({ success: true, idUsuario });
   } catch (error) {
     console.error("❌ Error creando usuario:", error);
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Error creando usuario" },
+      { status: 500 }
+    );
   }
 }
 
 // ✅ PUT - Editar usuario
 export async function PUT(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { id, email, password, idPersona, estado } = body;
-
-    // Normalizo idRol: puede venir como idRol o como roles[] (me quedo con el primero)
-    const idRol: number | undefined =
-      body.idRol ??
-      (Array.isArray(body.roles) && body.roles.length > 0
-        ? Number(body.roles[0])
-        : undefined);
-
-    if (!id) {
-      return NextResponse.json(
-        { error: "El id del usuario es obligatorio" },
-        { status: 400 }
-      );
-    }
-
+    const { id, email, idRol } = await req.json();
     const pool = await getConnection();
-    const request = pool.request();
-
-    // Base query dinámica
-    const sets: string[] = [];
-    request.input("id", sql.Int, id);
-
-    if (email !== undefined) {
-      sets.push("Email = @email");
-      request.input("email", sql.NVarChar, email);
+    await pool
+      .request()
+      .input("id", sql.Int, id)
+      .input("email", sql.NVarChar, email)
+      .input("idRol", sql.Int, idRol).query(`
+        UPDATE Usuarios
+        SET Email = @email, IdRol = @idRol
+        WHERE IdUsuario = @id
+      `);
+    // Buscar persona del usuario
+    const personaRes = await pool
+      .request()
+      .input("id", sql.Int, id)
+      .query("SELECT IdPersona FROM Usuarios WHERE IdUsuario = @id");
+    const idPersonaDb = personaRes.recordset[0]?.IdPersona;
+    if (idRol === 2) {
+      // Socio activo, árbitro inactivo
+      await pool.request().input("idPersona", sql.Int, idPersonaDb).query(`
+        UPDATE Socios SET Estado = 1 WHERE IdPersona = @idPersona;
+        UPDATE Arbitros SET Estado = 0 WHERE IdPersona = @idPersona;
+      `);
     }
-
-    if (estado !== undefined) {
-      sets.push("EstadoUsuario = @estado");
-      request.input("estado", sql.Int, estado);
+    if (idRol === 3) {
+      // Árbitro activo, socio inactivo
+      await pool.request().input("idPersona", sql.Int, idPersonaDb).query(`
+        UPDATE Socios SET Estado = 0 WHERE IdPersona = @idPersona;
+        IF EXISTS (SELECT 1 FROM Arbitros WHERE IdPersona = @idPersona)
+          UPDATE Arbitros SET Estado = 1 WHERE IdPersona = @idPersona;
+        ELSE
+          INSERT INTO Arbitros (IdPersona, Estado) VALUES (@idPersona, 1);
+      `);
     }
-
-    if (idPersona !== undefined) {
-      sets.push("IdPersona = @idPersona");
-      request.input("idPersona", sql.Int, idPersona);
-    }
-
-    if (idRol !== undefined) {
-      sets.push("IdRol = @idRol");
-      request.input("idRol", sql.Int, idRol);
-    }
-
-    if (password) {
-      const hash = await bcrypt.hash(password, 10);
-      sets.push("ContrasenaHash = @hash");
-      request.input("hash", sql.NVarChar, hash);
-    }
-
-    if (sets.length === 0) {
-      return NextResponse.json(
-        { error: "No hay campos para actualizar" },
-        { status: 400 }
-      );
-    }
-
-    const query = `UPDATE Usuarios SET ${sets.join(
-      ", "
-    )} WHERE IdUsuario = @id`;
-    await request.query(query);
-
-    return NextResponse.json({ success: true, message: "Usuario actualizado" });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error("❌ Error actualizando usuario:", error);
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Error actualizando usuario" },
+      { status: 500 }
+    );
   }
 }
 
@@ -216,46 +211,31 @@ export async function DELETE(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const { id, estado, idPersona } = await req.json();
-
-    if (!id) {
-      return NextResponse.json(
-        { error: "El id del usuario es obligatorio" },
-        { status: 400 }
-      );
-    }
-
     const pool = await getConnection();
 
-    // Caso especial: aprobar pendiente (0 → 1)
-    if (estado === 1) {
+    await pool
+      .request()
+      .input("id", sql.Int, id)
+      .input("estado", sql.Int, estado).query(`
+        UPDATE Usuarios SET EstadoUsuario = @estado WHERE IdUsuario = @id
+      `);
+
+    if (idPersona) {
       await pool
         .request()
-        .input("id", sql.Int, id)
-        .input("estado", sql.Int, estado)
-        .input("idPersona", sql.Int, idPersona || null) // por ahora dejamos en blanco el manejo de persona
-        .query(`
-          UPDATE Usuarios
-          SET EstadoUsuario = @estado, IdPersona = @idPersona
-          WHERE IdUsuario = @id
-        `);
-    } else {
-      // Toggle normal (activo/inactivo)
-      await pool
-        .request()
-        .input("id", sql.Int, id)
+        .input("idPersona", sql.Int, idPersona)
         .input("estado", sql.Int, estado).query(`
-          UPDATE Usuarios
-          SET EstadoUsuario = @estado
-          WHERE IdUsuario = @id
+          UPDATE Socios SET Estado = @estado WHERE IdPersona = @idPersona;
+          UPDATE Arbitros SET Estado = @estado WHERE IdPersona = @idPersona;
         `);
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Estado de usuario actualizado",
-    });
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("❌ Error actualizando estado de usuario:", error);
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+    console.error("❌ Error cambiando estado de usuario:", error);
+    return NextResponse.json(
+      { error: "Error cambiando estado" },
+      { status: 500 }
+    );
   }
 }
