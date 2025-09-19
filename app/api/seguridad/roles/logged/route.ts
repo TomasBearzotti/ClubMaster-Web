@@ -37,7 +37,12 @@ export async function GET() {
         })),
     };
 
-    return NextResponse.json(role);
+    // ✅ ahora devolvemos también info del usuario desde la cookie
+    return NextResponse.json({
+      ...role,
+      idUsuario: session.idUsuario,
+      email: session.email,
+    });
   } catch (error) {
     console.error("❌ Error obteniendo rol del usuario:", error);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });

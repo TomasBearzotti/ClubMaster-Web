@@ -68,19 +68,8 @@ export default function GestionCuotasPage() {
   });
 
   useEffect(() => {
-    const userData = localStorage.getItem("user");
-    if (!userData) {
-      router.push("/");
-      return;
-    }
-    const user = JSON.parse(userData);
-    if (user.idRol !== 1) {
-      router.push("/socio-dashboard");
-      return;
-    }
-
     loadCuotas();
-  }, [router]);
+  }, []);
 
   const loadCuotas = async () => {
     try {

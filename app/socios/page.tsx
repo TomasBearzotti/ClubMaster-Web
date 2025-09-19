@@ -89,20 +89,16 @@ export default function GestionSociosPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    const userData = localStorage.getItem("user");
-    if (!userData) {
-      router.push("/");
-      return;
-    }
-    const user = JSON.parse(userData);
-    if (user.idRol !== 1) {
-      router.push("/socio-dashboard");
-      return;
-    }
-
-    fetchSocios();
-    fetchTiposMembresia();
-  }, [router]);
+    const init = async () => {
+      try {
+        await fetchSocios();
+        await fetchTiposMembresia();
+      } catch (err) {
+        console.error("Error inicializando dashboard admin:", err);
+      }
+    };
+    init();
+  }, []);
 
   const fetchSocios = async () => {
     try {

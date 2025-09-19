@@ -59,7 +59,7 @@ interface Cuota {
   Periodo: string;
   Monto: number;
   FechaVencimiento: string;
-  Estado: number; // 0: Pendiente, 1: Pagada
+  Estado: number;
 }
 
 interface CalculoRecargo {
@@ -70,23 +70,19 @@ interface CalculoRecargo {
   montoRecargo: number;
   montoTotal: number;
   fechaVencimiento: string;
-  // si tu endpoint devuelve otra forma, al menos debe incluir "montoRecargo" y "montoTotal"
 }
 
 export default function RegistrarPagoPage() {
   const router = useRouter();
   const { toast } = useToast();
-
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSocio, setSelectedSocio] = useState<Socio | null>(null);
   const [sociosFiltrados, setSociosFiltrados] = useState<Socio[]>([]);
   const [loadingSocios, setLoadingSocios] = useState(false);
-
   const [cuotasPendientesSocio, setCuotasPendientesSocio] = useState<Cuota[]>(
     []
   );
   const [loadingCuotas, setLoadingCuotas] = useState(false);
-
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [selectedCuota, setSelectedCuota] = useState<Cuota | null>(null);
   const [metodoPago, setMetodoPago] = useState("");
@@ -94,20 +90,6 @@ export default function RegistrarPagoPage() {
     null
   );
   const [processingPayment, setProcessingPayment] = useState(false);
-
-  // Auth: admin (rol 1)
-  useEffect(() => {
-    const userData = localStorage.getItem("user");
-    if (!userData) {
-      router.push("/");
-      return;
-    }
-    const user = JSON.parse(userData);
-    if (user.idRol !== 1) {
-      router.push("/socio-dashboard");
-      return;
-    }
-  }, [router]);
 
   // Búsqueda de socios (debounced)
   useEffect(() => {
@@ -218,8 +200,6 @@ export default function RegistrarPagoPage() {
   };
 
   // Confirmar pago:
-  // - efectivo => /api/cuotas/registrar-pago (sin recargo)
-  // - tarjeta/transferencia => /api/cuotas/pago-online (con recargo como el socio)
   const handleConfirmarPago = async () => {
     if (!selectedCuota || !metodoPago) {
       toast({

@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getConnection, sql } from "@/lib/sql-server";
 
-/**
- * POST /api/personas
- * Crea persona. Si ya existe por DNI o Mail, devuelve la existente con alreadyExisted=true.
- * Body: { nombre, apellido, dni, telefono, mail }
- * Respuesta: { success: true, idPersona, alreadyExisted?: true, message }
- */
 export async function POST(req: NextRequest) {
   try {
     const { nombre, apellido, dni, telefono, mail } = await req.json();
@@ -67,11 +61,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-/**
- * GET /api/personas?q=texto
- * Lista personas (para autocompletar/búsquedas rápidas).
- * Si viene ?q, busca por nombre/apellido/dni/mail, sino devuelve últimas 100.
- */
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);

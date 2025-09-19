@@ -62,36 +62,49 @@ export default function SocioDashboardPage() {
   const [estadoCuenta, setEstadoCuenta] = useState<EstadoCuenta | null>(null);
 
   useEffect(() => {
-    const userData = localStorage.getItem("user");
-    if (!userData) {
-      router.push("/");
-      return;
-    }
+    const init = async () => {
+      try {
+        // 1) Usuario logueado (desde cookie)
+        const meRes = await fetch("/api/seguridad/roles/logged", {
+          cache: "no-store",
+          credentials: "include",
+        });
+        if (!meRes.ok) throw new Error("No se pudo obtener usuario actual");
+        const me = await meRes.json();
 
-    const user = JSON.parse(userData);
+        // 2) Resolver idPersona desde usuarios
+        const usersRes = await fetch("/api/seguridad/usuarios", {
+          cache: "no-store",
+        });
+        const users = await usersRes.json();
+        const yo = users.find((u: any) => u.id === me.idUsuario);
+        if (!yo?.idPersona) throw new Error("Usuario sin persona asignada");
 
-    switch (user.idRol) {
-      case 2:
-        // socio
-        break;
-      case 1:
-        // administrador
-        router.push("/dashboard");
-        return;
-      case 3:
-        // árbitro
-        router.push("/arbitro-dashboard");
-        return;
-      default:
-        localStorage.removeItem("user");
+        // 3) Resolver socio desde listado de socios
+        const sociosRes = await fetch("/api/socios", { cache: "no-store" });
+        const socios = await sociosRes.json();
+        const socio = socios.find((s: any) => s.IdPersona === yo.idPersona);
+        if (!socio) throw new Error("No se encontró socio");
+
+        // 4) Cargar datos usando IdSocio
+        await fetchSocioData(socio.IdSocio);
+        await fetchCuotas(socio.IdSocio);
+        await fetchEstadoCuenta(socio.IdSocio);
+
+        setLoading(false);
+      } catch (err) {
+        console.error("Error inicializando dashboard socio:", err);
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar tus datos de socio.",
+          variant: "destructive",
+        });
         router.push("/");
-        return;
-    }
+      }
+    };
 
-    fetchSocioData(user.idPersona);
-    fetchCuotas(user.idPersona);
-    fetchEstadoCuenta(user.idPersona);
-  }, [router]);
+    init();
+  }, [router, toast]);
 
   const fetchSocioData = async (socioId: number) => {
     try {

@@ -98,47 +98,39 @@ export default function MisEquiposPage() {
 
   useEffect(() => {
     const init = async () => {
-      const userData = localStorage.getItem("user");
-      if (!userData) {
-        router.push("/");
-        return;
-      }
-
-      const user = JSON.parse(userData);
-
-      // ✅ validar rol socio
-      if (user.idRol !== 2) {
-        router.push("/dashboard");
-        return;
-      }
-
-      if (!user.idPersona) {
-        console.error("El usuario no tiene idPersona asignado");
-        toast({
-          title: "Error",
-          description: "No se pudo cargar la información de socio.",
-          variant: "destructive",
-        });
-        router.push("/socio-dashboard");
-        return;
-      }
-
       try {
-        // ✅ obtener IdSocio a partir de la persona
-        const socioRes = await fetch(`/api/socios/${user.idPersona}`);
-        if (!socioRes.ok) throw new Error("No se pudo obtener el socio");
-        const socioData = await socioRes.json();
+        // 1) Usuario logueado
+        const meRes = await fetch("/api/seguridad/roles/logged", {
+          cache: "no-store",
+          credentials: "include",
+        });
+        if (!meRes.ok) throw new Error("No se pudo obtener usuario actual");
+        const me = await meRes.json();
 
-        // Guardar user con IdSocio resuelto
-        setCurrentUser({ ...user, socioId: socioData.IdSocio });
+        // 2) Buscar idPersona en usuarios
+        const usersRes = await fetch("/api/seguridad/usuarios", {
+          cache: "no-store",
+        });
+        const users = await usersRes.json();
+        const yo = users.find((u: any) => u.id === me.idUsuario);
+        if (!yo?.idPersona) throw new Error("Usuario sin persona asignada");
+
+        // 3) Buscar socio con ese idPersona
+        const sociosRes = await fetch("/api/socios", { cache: "no-store" });
+        const socios = await sociosRes.json();
+        const socio = socios.find((s: any) => s.IdPersona === yo.idPersona);
+        if (!socio) throw new Error("No se encontró socio");
+
+        // 4) Guardar user con socioId
+        setCurrentUser({ ...yo, socioId: socio.IdSocio });
 
         // Cargar equipos del socio
-        fetchEquipos(socioData.IdSocio);
+        fetchEquipos(socio.IdSocio);
 
         // Cargar socios disponibles
         fetchSocios();
 
-        // ✅ Cargar deportes
+        // Cargar deportes
         const deportesRes = await fetch("/api/deportes");
         if (deportesRes.ok) {
           const deportesData = await deportesRes.json();

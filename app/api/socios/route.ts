@@ -7,21 +7,20 @@ export async function GET() {
     const result = await pool.request().query(`
       SELECT 
         s.IdSocio,
+        s.IdPersona,
         p.Nombre,
         p.Apellido,
         p.Dni,
-        p.Mail as Email,
+        p.Mail AS Email,         
         p.Telefono,
         s.Estado,
         s.TipoMembresiaId,
-        tm.Descripcion as TipoMembresia,
+        tm.Descripcion AS TipoMembresia,
         tm.MontoMensual
       FROM Socios s
       INNER JOIN Personas p ON s.IdPersona = p.IdPersona
-      LEFT JOIN TiposMembresia tm ON s.TipoMembresiaId = tm.IdTipo
-      ORDER BY p.Nombre, p.Apellido
-    `);
-
+      INNER JOIN TiposMembresia tm ON s.TipoMembresiaId = tm.IdTipo
+  `);
     return NextResponse.json(result.recordset);
   } catch (error) {
     console.error("Error fetching socios:", error);
