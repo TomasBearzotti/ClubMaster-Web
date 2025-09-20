@@ -24,23 +24,21 @@ import {
   LogOut,
   Mail,
   Phone,
-  MapPin,
 } from "lucide-react";
 
 interface UserData {
   id: number;
+  idPersona: number;
   email: string;
-  rol: number;
+  idRol: number;
   rolTexto: string;
-  nombre: string;
-  socioId?: number;
+  nombreCompleto: string;
 }
 
 interface SocioData {
   IdSocio: number;
-  Nombre: string;
+  IdPersona: number;
   Dni: string;
-  Email: string;
   Telefono?: string;
   Estado: number;
   TipoMembresia?: string;
@@ -49,126 +47,126 @@ interface SocioData {
 export default function MiCuentaPage() {
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
-  const [socioData, setSocioData] = useState<SocioData | null>(null);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
-
+  const [socioData, setSocioData] = useState<SocioData | null>(null);
   const [formData, setFormData] = useState({
-    nombre: "",
     email: "",
     telefono: "",
-    direccion: "Av. Corrientes 1234, CABA",
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
   });
 
-  // Verificar autenticación y cargar datos del usuario
+  // 🔎 Cargar datos del usuario logueado
   useEffect(() => {
-    const userData = localStorage.getItem("user");
-    if (!userData) {
-      router.push("/");
-      return;
-    }
+    const init = async () => {
+      try {
+        // 1) Usuario logueado
+        const meRes = await fetch("/api/seguridad/roles/logged", {
+          cache: "no-store",
+          credentials: "include",
+        });
+        if (!meRes.ok) throw new Error("No se pudo obtener usuario actual");
+        const me = await meRes.json();
 
-    const parsedUser = JSON.parse(userData);
-    setUser(parsedUser);
+        // 2) Buscar datos del usuario
+        const usersRes = await fetch("/api/seguridad/usuarios", {
+          cache: "no-store",
+        });
+        const users = await usersRes.json();
+        const yo = users.find((u: any) => u.id === me.idUsuario);
+        if (!yo) throw new Error("No se encontró usuario en la API");
 
-    // Si es socio, cargar datos adicionales
-    if (parsedUser.rol === 2 && parsedUser.socioId) {
-      loadSocioData(parsedUser.socioId);
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        nombre: parsedUser.nombre || "",
-        email: parsedUser.email || "",
-      }));
-      setLoading(false);
-    }
+        // 3) Si es socio, buscar socio
+        let socio = null;
+        if (yo.idRol === 2 && yo.idPersona) {
+          const sociosRes = await fetch("/api/socios", { cache: "no-store" });
+          const socios = await sociosRes.json();
+          socio = socios.find((s: any) => s.IdPersona === yo.idPersona);
+        }
+        setSocioData(socio);
+
+        // 4) Setear estado del user
+        setUser({
+          id: yo.id,
+          idPersona: yo.idPersona,
+          email: yo.email,
+          idRol: yo.roles?.[0]?.idRol || 0,
+          rolTexto: yo.roles?.[0]?.nombre || "Sin rol",
+          nombreCompleto: `${yo.persona?.nombre || ""} ${
+            yo.persona?.apellido || ""
+          }`,
+        });
+
+        setSocioData(socioData);
+        setFormData({
+          email: yo.email,
+          telefono: yo.persona?.telefono || "",
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        });
+
+        setLoading(false);
+      } catch (err) {
+        console.error("❌ Error inicializando cuenta:", err);
+        router.push("/");
+      }
+    };
+
+    init();
   }, [router]);
 
-  const loadSocioData = async (socioId: number) => {
-    try {
-      const response = await fetch(`/api/socios/${socioId}`);
-      if (response.ok) {
-        const socio = await response.json();
-        setSocioData(socio);
-        setFormData((prev) => ({
-          ...prev,
-          nombre: socio.Nombre || "",
-          email: socio.Email || "",
-          telefono: socio.Telefono || "",
-        }));
-      }
-    } catch (error) {
-      console.error("Error cargando datos del socio:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleInputChange = (field: string, value: string) => {
-    setFormData({ ...formData, [field]: value });
-  };
-
+  // 🔎 Guardar cambios
   const handleSaveChanges = async () => {
     if (!user) return;
 
     try {
-      // Si es socio, actualizar datos en la tabla Socios
-      if (user.rol === 2 && user.socioId) {
-        const response = await fetch(`/api/socios/${user.socioId}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            nombre: formData.nombre,
-            dni: socioData?.Dni,
-            email: formData.email,
-            telefono: formData.telefono,
-            estado: socioData?.Estado,
-            tipoMembresiaId: socioData?.TipoMembresia || 1,
-          }),
-        });
+      // 1) Actualizar persona (telefono)
+      await fetch(`/api/seguridad/personas`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: user.idPersona,
+          telefono: formData.telefono,
+        }),
+      });
 
-        if (!response.ok) {
-          throw new Error("Error actualizando datos");
-        }
-      }
+      // 2) Actualizar usuario (email)
+      await fetch(`/api/seguridad/usuarios`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: user.id,
+          email: formData.email,
+          idRol: user.idRol,
+        }),
+      });
 
-      // Actualizar datos en localStorage
-      const updatedUser = {
-        ...user,
-        nombre: formData.nombre,
-        email: formData.email,
-      };
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-      setUser(updatedUser);
-
+      setUser({ ...user, email: formData.email });
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
-    } catch (error) {
-      console.error("Error guardando cambios:", error);
+    } catch (err) {
+      console.error("❌ Error guardando cambios:", err);
       alert("Error al guardar los cambios");
     }
   };
 
+  // 🔎 Cambio de contraseña (simulado)
   const handleChangePassword = async () => {
     if (formData.newPassword !== formData.confirmPassword) {
       alert("Las contraseñas no coinciden");
       return;
     }
-
     if (formData.newPassword.length < 6) {
       alert("La contraseña debe tener al menos 6 caracteres");
       return;
     }
 
-    // Simular cambio de contraseña (aquí implementarías la lógica real)
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
     setFormData({
@@ -182,31 +180,84 @@ export default function MiCuentaPage() {
     setTimeout(() => setShowSuccess(false), 3000);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("user");
+  // 🔎 Logout usando API
+  const handleLogout = async () => {
+    await fetch("/api/seguridad/logout", { method: "POST" });
     router.push("/");
   };
 
+  // 🔎 Volver según rol
   const handleVolver = () => {
-    if (user?.rol === 1) {
-      router.push("/dashboard");
-    } else {
-      router.push("/socio-dashboard");
-    }
+    if (user?.idRol === 1) router.push("/dashboard");
+    else if (user?.idRol === 2) router.push("/socio-dashboard");
+    else router.push("/");
   };
 
+  // 🔎 Darse de baja (simulado)
   const handleDarseDeBaja = () => {
-    if (user?.rol === 2) {
+    if (user?.idRol === 2) {
       if (
         confirm(
           "¿Estás seguro de que deseas darte de baja del club? Esta acción no se puede deshacer."
         )
       ) {
-        localStorage.removeItem("user");
         alert("Te has dado de baja exitosamente. Lamentamos verte partir.");
         router.push("/");
       }
     }
+  };
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData({ ...formData, [field]: value });
+  };
+
+  // Badge de rol (tal cual pasaste)
+  const norm = (str?: string) =>
+    str
+      ?.toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") || "";
+
+  const getRoleBadge = (roleRaw?: string) => {
+    const key = norm(roleRaw);
+    if (!key) return <Badge variant="secondary">Sin rol</Badge>;
+    if (["administrador general", "administrador", "admin"].includes(key))
+      return (
+        <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
+          <User className="w-3 h-3 mr-1" /> {roleRaw}
+        </Badge>
+      );
+    if (key === "socio")
+      return (
+        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+          <User className="w-3 h-3 mr-1" /> {roleRaw}
+        </Badge>
+      );
+    if (key === "arbitro")
+      return (
+        <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">
+          <User className="w-3 h-3 mr-1" /> {roleRaw}
+        </Badge>
+      );
+    if (key === "tesorero")
+      return (
+        <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+          $ {roleRaw}
+        </Badge>
+      );
+    if (
+      [
+        "responsable de deportes",
+        "responsable deportes",
+        "responsable de deporte",
+      ].includes(key)
+    )
+      return (
+        <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">
+          🏆 {roleRaw}
+        </Badge>
+      );
+    return <Badge variant="secondary">{roleRaw}</Badge>;
   };
 
   if (loading) {
@@ -281,18 +332,16 @@ export default function MiCuentaPage() {
               <CardHeader className="text-center">
                 <Avatar className="h-24 w-24 mx-auto mb-4">
                   <AvatarFallback className="text-2xl">
-                    {user.nombre
+                    {user.nombreCompleto
                       .split(" ")
                       .map((n) => n[0])
                       .join("")}
                   </AvatarFallback>
                 </Avatar>
-                <CardTitle className="text-xl">{user.nombre}</CardTitle>
+                <CardTitle className="text-xl">{user.nombreCompleto}</CardTitle>
                 <CardDescription>{user.email}</CardDescription>
                 <div className="flex justify-center mt-2">
-                  <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
-                    {user.rolTexto}
-                  </Badge>
+                  {getRoleBadge(user?.rolTexto)}
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -303,21 +352,21 @@ export default function MiCuentaPage() {
                     <span className="font-medium">{user.id}</span>
                   </div>
                   {socioData && (
-                    <>
-                      <div className="flex items-center gap-2 text-sm">
+                    <div className="mt-6 space-y-2 text-sm">
+                      <div className="flex items-center gap-2">
                         <User className="h-4 w-4 text-gray-500" />
                         <span className="text-gray-600">DNI:</span>
                         <span className="font-medium">{socioData.Dni}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <Badge className="h-4 w-4 text-gray-500" />
+
+                      <div className="flex items-center gap-2">
                         <span className="text-gray-600">Membresía:</span>
                         <span className="font-medium">
                           {socioData.TipoMembresia || "No especificada"}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <User className="h-4 w-4 text-gray-500" />
+
+                      <div className="flex items-center gap-2">
                         <span className="text-gray-600">Estado:</span>
                         <Badge
                           variant={
@@ -327,7 +376,7 @@ export default function MiCuentaPage() {
                           {socioData.Estado === 1 ? "Activo" : "Inactivo"}
                         </Badge>
                       </div>
-                    </>
+                    </div>
                   )}
                 </div>
               </CardContent>
@@ -351,14 +400,11 @@ export default function MiCuentaPage() {
                 <div className="space-y-2">
                   <Label htmlFor="nombre">Nombre Completo</Label>
                   <Input
-                    id="nombre"
-                    value={formData.nombre}
-                    onChange={(e) =>
-                      handleInputChange("nombre", e.target.value)
-                    }
+                    value={user?.nombreCompleto || ""}
+                    readOnly
+                    className="bg-white text-black cursor-default"
                   />
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="email" className="flex items-center gap-2">
                     <Mail className="h-4 w-4" />
@@ -386,24 +432,6 @@ export default function MiCuentaPage() {
                     placeholder="Ej: +54 11 1234-5678"
                   />
                 </div>
-
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="direccion"
-                    className="flex items-center gap-2"
-                  >
-                    <MapPin className="h-4 w-4" />
-                    Dirección
-                  </Label>
-                  <Input
-                    id="direccion"
-                    value={formData.direccion}
-                    onChange={(e) =>
-                      handleInputChange("direccion", e.target.value)
-                    }
-                  />
-                </div>
-
                 <div className="flex justify-end">
                   <Button
                     onClick={handleSaveChanges}
@@ -562,7 +590,7 @@ export default function MiCuentaPage() {
                 </div>
 
                 {/* Solo mostrar opción de darse de baja para socios */}
-                {user.rol === 2 && (
+                {user?.idRol === 2 && (
                   <div className="flex justify-between items-center pt-4 border-t">
                     <div>
                       <h4 className="font-medium text-red-700">

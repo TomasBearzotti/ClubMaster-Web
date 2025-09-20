@@ -99,5 +99,6 @@ export const config = {
     "/socio/:path*",
     "/arbitro/:path*",
     "/partidos/:path*",
+    "/cuenta/:path*",
   ],
 };
