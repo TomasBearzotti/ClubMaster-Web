@@ -35,11 +35,12 @@ El objetivo es facilitar las tareas administrativas y deportivas, reducir errore
 2. Instalar dependencias:
    `npm install`
 3. Configurar la conexión a SQL Server:
-    `lib/sql-server.ts`  
-4. Levantar el entorno de desarrollo:
+   `lib/sql-server.ts`
+4. Ejecutar la querry de la base de datos en SQL Server
+5. Levantar el entorno de desarrollo:
    `npm run dev`  
-5. Acceder:
+6. Acceder:
    `http://localhost:3000`
 
-   ## Autor
+## Autor
 - **Tomás Bearzotti** – Ingeniería en Sistemas de la Universidad Abierta Interamericana
