@@ -57,14 +57,14 @@ const HARDCODED_TEST_USERS = [
   {
     email: "tesorero@clubmaster.com",
     password: "123456",
-    displayName: "Tesorero",
+    displayName: "Maldonado T",
     role: "Tesorero",
     description: "Tesorero del club",
   },
   {
     email: "responsable.deporte@clubmaster.com",
     password: "123456",
-    displayName: "Responsable de Deporte",
+    displayName: "Forza RD",
     role: "Responsable de Deporte",
     description: "Responsable de la gestión deportiva",
   },

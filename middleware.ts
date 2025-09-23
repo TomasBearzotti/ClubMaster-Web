@@ -37,6 +37,11 @@ const PERMISOS_RUTAS: Record<string, string> = {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // 🔑 Armar base URL usando headers reales
+  const host = request.headers.get("host") || "clubmaster.giize.com";
+  const protocol = request.headers.get("x-forwarded-proto") || "https";
+  const baseUrl = `${protocol}://${host}`;
+
   // Si la ruta es pública -> dejar pasar
   if (
     PUBLIC_PATHS.some((path) =>
@@ -49,7 +54,7 @@ export function middleware(request: NextRequest) {
   // Leer cookie de sesión
   const sessionCookie = request.cookies.get("session")?.value;
   if (!sessionCookie) {
-    return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.redirect(new URL("/", baseUrl));
   }
 
   try {
@@ -57,7 +62,7 @@ export function middleware(request: NextRequest) {
 
     // Validación mínima
     if (!session?.idUsuario || !session?.idRol) {
-      return NextResponse.redirect(new URL("/", request.url));
+      return NextResponse.redirect(new URL("/", baseUrl));
     }
 
     // Buscar permiso requerido según ruta
@@ -73,14 +78,14 @@ export function middleware(request: NextRequest) {
       );
 
       if (!permisosUsuario.includes(permisoRequerido)) {
-        return NextResponse.redirect(new URL("/denegado", request.url));
+        return NextResponse.redirect(new URL("/denegado", baseUrl));
       }
     }
 
     // ✅ Si no hay permiso asociado (ej: /partido/[id]), basta con estar logueado
     return NextResponse.next();
   } catch {
-    return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.redirect(new URL("/", baseUrl));
   }
 }
 
