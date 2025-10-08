@@ -9,6 +9,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  allowedDevOrigins: ['local-origin.dev', '*.local-origin.dev', 'clubmaster.giize.com']
 }
 
 export default nextConfig
