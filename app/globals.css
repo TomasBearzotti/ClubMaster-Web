@@ -92,3 +92,102 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* === DARK MODE OLED: negros puros, colores vivos sin alterar === */
+.dark-mode {
+  background: #000 !important;
+  color: #f5f5f5 !important;
+}
+
+/* Fondos base */
+.dark-mode body,
+.dark-mode header,
+.dark-mode main,
+.dark-mode section,
+.dark-mode div,
+.dark-mode footer {
+  background-color: #000 !important;
+  color: #f5f5f5 !important;
+  border-color: #1a1a1a !important;
+}
+
+/* Gradientes Tailwind */
+.dark-mode .bg-gradient-to-br,
+.dark-mode .bg-gradient-to-r,
+.dark-mode .bg-gradient-to-l,
+.dark-mode .bg-gradient-to-t,
+.dark-mode .bg-gradient-to-b {
+  background: #000 !important;
+}
+
+/* === TEXTOS NEUTROS === */
+.dark-mode .text-gray-900,
+.dark-mode .text-gray-800,
+.dark-mode .text-blue-700,
+.dark-mode .text-blue-600 {
+  color: #e5e7eb !important;
+}
+
+.dark-mode .text-gray-600,
+.dark-mode .text-gray-500,
+.dark-mode .text-muted-foreground {
+  color: #a1a1aa !important;
+}
+
+/* === BLOQUES PRINCIPALES === */
+.dark-mode .card,
+.dark-mode .bg-white,
+.dark-mode .shadow-sm {
+  background-color: #0a0a0a !important;
+  border-color: #1f1f1f !important;
+  color: #f5f5f5 !important;
+}
+
+/* Header */
+.dark-mode header {
+  background-color: #0a0a0a !important;
+  border-bottom: 1px solid #1a1a1a !important;
+}
+
+/* Botones / inputs */
+.dark-mode button {
+  background-color: #111 !important;
+  color: #f5f5f5 !important;
+  border-color: #1f1f1f !important;
+}
+
+.dark-mode input,
+.dark-mode select,
+.dark-mode textarea {
+  background-color: #111 !important;
+  color: #f5f5f5 !important;
+  border-color: #1f1f1f !important;
+}
+
+/* === NO TOCAR COLORES VIVOS === */
+/* Dejá pasar cualquier color con fondo verde, rojo, amarillo, azul, púrpura */
+.dark-mode [class*="bg-green"],
+.dark-mode [class*="bg-red"],
+.dark-mode [class*="bg-yellow"],
+.dark-mode [class*="bg-blue"],
+.dark-mode [class*="bg-purple"],
+.dark-mode [class*="bg-indigo"],
+.dark-mode [class*="bg-emerald"],
+.dark-mode [class*="bg-lime"],
+.dark-mode [class*="bg-cyan"],
+.dark-mode [class*="bg-sky"] {
+  background-color: revert !important;
+  color: revert !important;
+  border-color: revert !important;
+}
+
+/* === BORDES === */
+.dark-mode .border-blue-200,
+.dark-mode .border-gray-200 {
+  border-color: #1a1a1a !important;
+}
+
+/* === IMÁGENES === */
+.dark-mode img {
+  filter: brightness(0.95) contrast(1.05);
+}

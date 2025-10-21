@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Users,
   CreditCard,
@@ -170,6 +171,7 @@ export default function DashboardPage() {
               </h1>
             </div>
             <div className="flex items-center gap-4">
+              <ThemeToggle /> {/* 🔘 este es el switch */}
               <Button
                 variant="ghost"
                 size="icon"

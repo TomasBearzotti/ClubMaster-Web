@@ -3,6 +3,7 @@
 import type React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -286,6 +287,16 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
+        {/* Header */}
+        <header className="fixed top-0 left-0 w-full bg-white border-b border-blue-200 shadow-sm z-50">
+          <div className="flex items-center justify-between px-6 h-16">
+            <h1 className="text-2xl font-bold text-blue-700">
+              ClubMaster Admin
+            </h1>
+            <ThemeToggle />
+          </div>
+        </header>
+
         {/* Estado de la base de datos */}
         <DatabaseStatus />
 
