@@ -248,22 +248,16 @@ export default function SocioDashboardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100">
-      {/* Header */}
-      <header className="fixed top-0 left-0 w-full bg-white shadow-sm border-b border-blue-200 z-50">
+      {/* Header (mismo tamaño y clases originales) */}
+      <header className="bg-white shadow-sm border-b border-blue-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            {/* Título */}
             <div className="flex items-center">
               <h1 className="text-2xl font-bold text-blue-700">
                 ClubMaster Socio
               </h1>
             </div>
-
-            {/* Controles */}
             <div className="flex items-center gap-4">
-              {/* 🔘 Switch de modo oscuro */}
-              <ThemeToggle />
-
               <Button
                 variant="ghost"
                 size="icon"
@@ -272,7 +266,6 @@ export default function SocioDashboardPage() {
                 <Settings className="h-5 w-5" />
                 <span className="sr-only">Configuración de Cuenta</span>
               </Button>
-
               <Button
                 variant="ghost"
                 onClick={handleLogout}
@@ -281,6 +274,8 @@ export default function SocioDashboardPage() {
                 <LogOut className="h-4 w-4" />
                 Cerrar Sesión
               </Button>
+              {/* Switch a la derecha */}
+              <ThemeToggle />
             </div>
           </div>
         </div>
