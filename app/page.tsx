@@ -290,9 +290,7 @@ export default function LoginPage() {
         {/* Header */}
         <header className="fixed top-0 left-0 w-full bg-white border-b border-blue-200 shadow-sm z-50">
           <div className="flex items-center justify-between px-6 h-16">
-            <h1 className="text-2xl font-bold text-blue-700">
-              ClubMaster Admin
-            </h1>
+            <h1 className="text-2xl font-bold text-blue-700">ClubMaster</h1>
             <ThemeToggle />
           </div>
         </header>
