@@ -4,7 +4,12 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/lib/auth-context";
-import { ClientDarkLayout } from "../components/ClientDarkLayout";
+import dynamic from "next/dynamic";
+
+const ClientDarkLayout = dynamic(
+  () => import("@/components/ClientDarkLayout").then((m) => m.ClientDarkLayout),
+  { ssr: false }
+);
 
 const inter = Inter({ subsets: ["latin"] });
 

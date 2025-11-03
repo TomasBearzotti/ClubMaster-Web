@@ -3,7 +3,6 @@
 import type React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,6 +37,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+
+import dynamic from "next/dynamic";
+const ThemeToggle = dynamic(
+  () => import("@/components/ThemeToggle").then((m) => m.ThemeToggle),
+  { ssr: false }
+);
 
 // 🔧 USUARIOS HARDCODEADOS PARA PRUEBAS
 const HARDCODED_TEST_USERS = [
