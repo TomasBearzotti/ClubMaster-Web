@@ -28,3 +28,7 @@ next-env.d.ts
 
 /lib/
 Caddyfile
+
+# scripts de inicio locales
+start.ps1
+start.bat
