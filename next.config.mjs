@@ -1,3 +1,6 @@
+// Deshabilitamos next-pwa y usamos el service worker de PWABuilder
+// import withPWA from "next-pwa";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
@@ -9,7 +12,12 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  allowedDevOrigins: ['local-origin.dev', '*.local-origin.dev', 'clubmaster.giize.com']
-}
+  allowedDevOrigins: [
+    "local-origin.dev",
+    "*.local-origin.dev",
+    "clubmaster.giize.com",
+  ],
+};
 
-export default nextConfig
+// Exportamos la config sin next-pwa, usamos pwabuilder-sw.js manual
+export default nextConfig;

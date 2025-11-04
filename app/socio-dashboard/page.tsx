@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
+
+export const dynamic = "force-dynamic";
 import {
   User,
   CreditCard,
