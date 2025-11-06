@@ -1,132 +1,171 @@
-// ClubMaster Service Worker - Enhanced with PWA features
-// Includes: Offline Support, Background Sync, Periodic Sync, Push Notifications
+// ClubMaster Service Worker - Optimizado para desarrollo ágil
+// Estrategia: Network First para TODO - Cache solo como último recurso offline
 
-const CACHE = "clubmaster-v2";
-const OFFLINE_CACHE = "clubmaster-offline-v2";
-const SYNC_QUEUE = "clubmaster-sync-queue";
+const VERSION = "clubmaster-v3.1";
+const STATIC_CACHE = `${VERSION}-static`;
+const RUNTIME_CACHE = `${VERSION}-runtime`;
 
-importScripts('https://storage.googleapis.com/workbox-cdn/releases/5.1.2/workbox-sw.js');
+// Solo cachear assets estáticos que NO cambian
+const STATIC_ASSETS = [
+  '/icons/icon-192x192.png',
+  '/icons/icon-512x512.png',
+  '/manifest.json',
+];
 
-// Offline fallback page
-const offlineFallbackPage = "/";
-
-// ===== INSTALL & ACTIVATION =====
-self.addEventListener("install", async (event) => {
-  console.log("✅ Service Worker instalando...");
+// ===== INSTALL =====
+self.addEventListener("install", (event) => {
+  console.log(`✅ SW ${VERSION} instalando...`);
+  
   event.waitUntil(
-    caches.open(OFFLINE_CACHE)
-      .then((cache) => cache.add(offlineFallbackPage))
-      .then(() => self.skipWaiting())
+    caches.open(STATIC_CACHE)
+      .then((cache) => cache.addAll(STATIC_ASSETS))
+      .then(() => {
+        console.log('✅ Assets estáticos cacheados');
+        return self.skipWaiting(); // Activa inmediatamente
+      })
   );
 });
 
+// ===== ACTIVATE =====
 self.addEventListener("activate", (event) => {
-  console.log("✅ Service Worker activado");
-  event.waitUntil(self.clients.claim());
+  console.log(`✅ SW ${VERSION} activando...`);
+  
+  event.waitUntil(
+    // Limpiar caches antiguos
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames
+          .filter((cacheName) => {
+            return cacheName.startsWith('clubmaster-') && cacheName !== STATIC_CACHE && cacheName !== RUNTIME_CACHE;
+          })
+          .map((cacheName) => {
+            console.log(`🗑️ Eliminando cache antigua: ${cacheName}`);
+            return caches.delete(cacheName);
+          })
+      );
+    }).then(() => {
+      console.log('✅ Caches antiguas eliminadas');
+      return self.clients.claim(); // Toma control inmediato
+    })
+  );
 });
+
+// ===== FETCH - ESTRATEGIA NETWORK FIRST =====
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // IGNORAR requests de hot-reload, websockets, y chrome extensions
+  if (
+    url.pathname.startsWith('/_next/webpack-hmr') ||
+    url.pathname.startsWith('/_next/static/webpack') ||
+    url.protocol === 'chrome-extension:' ||
+    request.method !== 'GET'
+  ) {
+    return;
+  }
+
+  event.respondWith(handleFetch(request));
+});
+
+async function handleFetch(request) {
+  const url = new URL(request.url);
+
+  // 1. PÁGINAS HTML Y APIS - SIEMPRE RED PRIMERO, NO CACHE
+  if (
+    request.mode === 'navigate' ||
+    url.pathname.startsWith('/api/') ||
+    url.pathname.endsWith('.json')
+  ) {
+    try {
+      // Siempre intentar red primero
+      const networkResponse = await fetch(request);
+      
+      // No cachear respuestas de error
+      if (!networkResponse || networkResponse.status !== 200) {
+        return networkResponse;
+      }
+
+      return networkResponse;
+    } catch (error) {
+      // Solo si estamos offline, mostrar mensaje
+      console.log('❌ Sin conexión para:', url.pathname);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Sin conexión a internet',
+          offline: true 
+        }),
+        {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+  }
+
+  // 2. ASSETS ESTÁTICOS (_next/static, imágenes, etc) - Cache primero
+  if (
+    url.pathname.startsWith('/_next/static/') ||
+    url.pathname.startsWith('/icons/') ||
+    url.pathname === '/manifest.json'
+  ) {
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+
+    try {
+      const networkResponse = await fetch(request);
+      if (networkResponse && networkResponse.status === 200) {
+        const cache = await caches.open(STATIC_CACHE);
+        cache.put(request, networkResponse.clone());
+      }
+      return networkResponse;
+    } catch (error) {
+      console.log('❌ Error cargando asset:', url.pathname);
+    }
+  }
+
+  // 3. TODO LO DEMÁS - Red directa sin cache
+  try {
+    return await fetch(request);
+  } catch (error) {
+    // Fallback solo para assets críticos
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    
+    throw error;
+  }
+}
 
 // ===== MENSAJES =====
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
+    console.log('⚡ Actualizando Service Worker...');
     self.skipWaiting();
   }
-});
-
-// ===== WORKBOX CONFIGURATION =====
-if (workbox.navigationPreload.isSupported()) {
-  workbox.navigationPreload.enable();
-}
-
-// Cache de navegación con estrategia StaleWhileRevalidate
-workbox.routing.registerRoute(
-  new RegExp('/*'),
-  new workbox.strategies.StaleWhileRevalidate({
-    cacheName: CACHE
-  })
-);
-
-// Cache de API con NetworkFirst (prioriza red, fallback a cache)
-workbox.routing.registerRoute(
-  /\/api\/.*/,
-  new workbox.strategies.NetworkFirst({
-    cacheName: 'api-cache',
-    networkTimeoutSeconds: 10,
-    plugins: [
-      new workbox.expiration.ExpirationPlugin({
-        maxEntries: 50,
-        maxAgeSeconds: 5 * 60, // 5 minutos
-      }),
-    ],
-  })
-);
-
-// ===== FETCH CON OFFLINE SUPPORT =====
-self.addEventListener('fetch', (event) => {
-  if (event.request.mode === 'navigate') {
-    event.respondWith((async () => {
-      try {
-        const preloadResp = await event.preloadResponse;
-        if (preloadResp) {
-          return preloadResp;
-        }
-
-        const networkResp = await fetch(event.request);
-        return networkResp;
-      } catch (error) {
-        const cache = await caches.open(OFFLINE_CACHE);
-        const cachedResp = await cache.match(offlineFallbackPage);
-        return cachedResp;
-      }
-    })());
-  }
-});
-
-// ===== BACKGROUND SYNC =====
-// Sincroniza datos cuando vuelve la conexión
-self.addEventListener('sync', (event) => {
-  console.log('🔄 Background Sync disparado:', event.tag);
   
-  if (event.tag === 'sync-data') {
-    event.waitUntil(syncData());
+  if (event.data && event.data.type === "CLEAR_CACHE") {
+    console.log('🗑️ Limpiando todas las caches...');
+    event.waitUntil(
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => caches.delete(cacheName))
+        );
+      })
+    );
   }
 });
 
-async function syncData() {
-  try {
-    // Aquí puedes sincronizar datos pendientes
-    console.log('✅ Sincronización completada');
-  } catch (error) {
-    console.error('❌ Error en sincronización:', error);
-  }
-}
-
-// ===== PERIODIC SYNC =====
-// Sincronización periódica en segundo plano
-self.addEventListener('periodicsync', (event) => {
-  console.log('⏰ Periodic Sync disparado:', event.tag);
-  
-  if (event.tag === 'update-data') {
-    event.waitUntil(updateDataPeriodically());
-  }
-});
-
-async function updateDataPeriodically() {
-  try {
-    // Aquí puedes actualizar datos periódicamente
-    console.log('✅ Actualización periódica completada');
-  } catch (error) {
-    console.error('❌ Error en actualización periódica:', error);
-  }
-}
-
-// ===== PUSH NOTIFICATIONS =====
-// Recibir notificaciones push
+// ===== PUSH NOTIFICATIONS (opcional) =====
 self.addEventListener('push', (event) => {
   console.log('📬 Push notification recibida');
   
   let notificationData = {
     title: 'ClubMaster',
-    body: 'Tienes una nueva notificación',
+    body: 'Nueva notificación',
     icon: '/icons/icon-192x192.png',
     badge: '/icons/icon-192x192.png',
   };
@@ -150,14 +189,11 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// Click en notificación
 self.addEventListener('notificationclick', (event) => {
-  console.log('🔔 Notificación clickeada');
   event.notification.close();
-
   event.waitUntil(
     clients.openWindow(event.notification.data?.url || '/')
   );
 });
 
-console.log('🚀 ClubMaster Service Worker cargado con todas las funcionalidades PWA');
+console.log(`🚀 ClubMaster SW ${VERSION} - Network First (Sin cache agresivo)`);
