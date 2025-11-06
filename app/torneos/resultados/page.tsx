@@ -72,7 +72,7 @@ interface Partido {
   ParticipanteA: string;
   ParticipanteB: string;
   FechaHora?: string;
-  Fase: string;
+  FixtureNombre: string; // Nombre del fixture (antes era Fase)
   Lugar: string;
   Estado: number;
   TieneEstadisticas: boolean;
@@ -471,7 +471,7 @@ export default function CargarResultadosPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">{partido.Fase}</Badge>
+                          <Badge variant="outline">{partido.FixtureNombre}</Badge>
                         </TableCell>
                         <TableCell>
                           {getEstadoPartidoBadge(partido.Estado)}

@@ -24,6 +24,7 @@ export async function GET(
           t.MaxParticipantes,
           t.FechaFin,
           t.PremioGanador,
+          t.TipoTorneo,
         COUNT(p.IdParticipante) as Participantes
         FROM Torneos t
         INNER JOIN Deportes d ON t.IdDeporte = d.IdDeporte
@@ -31,7 +32,7 @@ export async function GET(
         WHERE t.IdTorneo = @torneoId
         GROUP BY t.IdTorneo, t.Nombre, t.IdDeporte, d.Nombre, 
          t.FechaInicio, t.Estado, t.Descripcion, t.MaxParticipantes, 
-         t.FechaFin, t.PremioGanador
+         t.FechaFin, t.PremioGanador, t.TipoTorneo
       `);
 
     if (torneoResult.recordset.length === 0) {
@@ -54,6 +55,7 @@ export async function GET(
       MaxParticipantes: torneo.MaxParticipantes,
       FechaFin: torneo.FechaFin,
       PremioGanador: torneo.PremioGanador,
+      TipoTorneo: torneo.TipoTorneo,
       Participantes: torneo.Participantes,
     });
   } catch (error) {
@@ -127,6 +129,7 @@ export async function PUT(
 
     const pool = await getConnection();
 
+    // TipoTorneo NO se puede editar manualmente, se define al generar el fixture
     await pool
       .request()
       .input("torneoId", sql.Int, torneoId)

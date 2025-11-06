@@ -70,6 +70,7 @@ import {
 import { format } from "date-fns";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import { BracketView } from "@/components/BracketView";
 
 interface Torneo {
   IdTorneo: number;
@@ -79,6 +80,7 @@ interface Torneo {
   FechaInicio: string;
   Estado: number;
   Participantes: number;
+  TipoTorneo?: number; // 0=Liga, 1=Eliminación, 2=Grupos+Eliminación, null=Sin fixture generado
   Descripcion?: string;
   MaxParticipantes?: number;
   FechaFin?: string;
@@ -112,9 +114,10 @@ interface Partido {
   IdPartido: number;
   IdTorneo: number;
   FechaHora?: string;
-  ParticipanteA: string;
-  ParticipanteB: string;
-  Fase: string;
+  ParticipanteA: string | null; // Puede ser null para partidos TBD
+  ParticipanteB: string | null; // Puede ser null para partidos TBD
+  FixtureNombre: string; // Nombre del fixture (antes era Fase)
+  NumeroRonda?: number; // Número de ronda del fixture
   Grupo?: string;
   Lugar: string;
   Estado: number;
@@ -945,14 +948,14 @@ export default function GestionTorneosPage() {
 
                 {/* Contenido Expandido */}
                 {torneosExpandidos.has(torneo.IdTorneo) && (
-                  <CardContent className="border-t bg-gray-50">
+                  <CardContent className="border-t bg-gray-50 p-0">
                     {loadingDetalles.has(torneo.IdTorneo) ? (
                       <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin mr-2" />
                         Cargando detalles...
                       </div>
                     ) : torneosDetalle[torneo.IdTorneo] ? (
-                      <div className="space-y-6 py-4">
+                      <div className="space-y-6 py-4 px-4">
                         {/* Información del Torneo */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-white rounded-lg">
                           <div>
@@ -1020,18 +1023,96 @@ export default function GestionTorneosPage() {
                         )}
 
                         {/* Contenido Principal: Participantes y Partidos */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                          {/* Participantes - Columna más pequeña */}
-                          <Card className="lg:col-span-1">
-                            <CardHeader className="pb-3">
-                              <CardTitle className="flex items-center gap-2 text-base">
-                                <Users className="h-4 w-4" />
-                                Participantes (
-                                {participantesPorTorneo[torneo.IdTorneo]
-                                  ?.length || 0}
-                                )
-                              </CardTitle>
-                            </CardHeader>
+                        {/* Si es torneo de eliminación (bracket), mostrar en modo especial */}
+                        {torneo.TipoTorneo === 1 ? (
+                          <div className="space-y-4">
+                            {/* Participantes en una fila horizontal compacta */}
+                            <Card>
+                              <CardHeader className="pb-3">
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                  <Users className="h-4 w-4" />
+                                  Participantes (
+                                  {participantesPorTorneo[torneo.IdTorneo]
+                                    ?.length || 0}
+                                  )
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent className="pt-0">
+                                {!participantesPorTorneo[torneo.IdTorneo] ||
+                                participantesPorTorneo[torneo.IdTorneo].length ===
+                                  0 ? (
+                                  <p className="text-gray-500 text-center py-4 text-sm">
+                                    No hay participantes inscritos
+                                  </p>
+                                ) : (
+                                  <div className="flex flex-wrap gap-2">
+                                    {participantesPorTorneo[torneo.IdTorneo].map(
+                                      (participante) => (
+                                        <Badge
+                                          key={participante.id}
+                                          variant="outline"
+                                          className="flex items-center gap-1 px-3 py-1"
+                                        >
+                                          {getParticipanteIcon(participante)}
+                                          <span>{participante.nombre}</span>
+                                        </Badge>
+                                      )
+                                    )}
+                                  </div>
+                                )}
+                              </CardContent>
+                            </Card>
+
+                            {/* Bracket ocupa todo el ancho */}
+                            <Card>
+                              <CardHeader className="pb-3">
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                  <Calendar className="h-4 w-4" />
+                                  Bracket de Eliminación (
+                                  {partidosPorTorneo[torneo.IdTorneo]?.length ||
+                                    0}{" "}
+                                  partidos)
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent className="pt-0">
+                                {!partidosPorTorneo[torneo.IdTorneo] ||
+                                partidosPorTorneo[torneo.IdTorneo].length ===
+                                  0 ? (
+                                  <div className="text-center py-8">
+                                    <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                                    <p className="text-gray-500 mb-4">
+                                      No se han generado partidos todavía
+                                    </p>
+                                    <Button
+                                      onClick={handleGenerarFixture}
+                                      className="bg-yellow-600 hover:bg-yellow-700"
+                                    >
+                                      <Calendar className="h-4 w-4 mr-2" />
+                                      Generar Fixture
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <BracketView
+                                    partidos={partidosPorTorneo[torneo.IdTorneo]}
+                                  />
+                                )}
+                              </CardContent>
+                            </Card>
+                          </div>
+                        ) : (
+                          // Layout normal en grid para torneos que NO son de eliminación
+                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* Participantes - Columna más pequeña */}
+                            <Card className="lg:col-span-1">
+                              <CardHeader className="pb-3">
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                  <Users className="h-4 w-4" />
+                                  Participantes (
+                                  {participantesPorTorneo[torneo.IdTorneo]
+                                    ?.length || 0}
+                                  )
+                                </CardTitle>
+                              </CardHeader>
                             <CardContent className="pt-0">
                               {!participantesPorTorneo[torneo.IdTorneo] ||
                               participantesPorTorneo[torneo.IdTorneo].length ===
@@ -1132,6 +1213,11 @@ export default function GestionTorneosPage() {
                                 {partidosPorTorneo[torneo.IdTorneo]?.length ||
                                   0}
                                 )
+                                {torneo.TipoTorneo === 1 && (
+                                  <Badge variant="outline" className="ml-2">
+                                    Bracket
+                                  </Badge>
+                                )}
                               </CardTitle>
                             </CardHeader>
                             <CardContent className="pt-0">
@@ -1162,7 +1248,7 @@ export default function GestionTorneosPage() {
                                         <div className="flex items-center justify-between mb-2">
                                           <div className="flex items-center gap-2">
                                             <Badge variant="outline">
-                                              {partido.Fase}
+                                              {partido.FixtureNombre}
                                             </Badge>
                                             <span className="text-sm text-gray-600">
                                               {partido.Lugar}
@@ -1182,8 +1268,8 @@ export default function GestionTorneosPage() {
                                         </div>
                                         <div className="text-center">
                                           <div className="font-medium">
-                                            {partido.ParticipanteA} vs{" "}
-                                            {partido.ParticipanteB}
+                                            {partido.ParticipanteA || <span className="text-gray-400 italic">TBD</span>} vs{" "}
+                                            {partido.ParticipanteB || <span className="text-gray-400 italic">TBD</span>}
                                           </div>
                                           <div className="text-sm text-gray-600 flex items-center justify-center gap-2 mt-1">
                                             <Clock className="h-3 w-3" />
@@ -1212,7 +1298,8 @@ export default function GestionTorneosPage() {
                               )}
                             </CardContent>
                           </Card>
-                        </div>
+                          </div>
+                        )}
                       </div>
                     ) : null}
                   </CardContent>

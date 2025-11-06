@@ -20,8 +20,8 @@ export async function GET(
           p.FechaPartido,
           p.HoraPartido,
           p.Lugar,
-          p.Fase,
-          p.Grupo,
+          f.Nombre AS FixtureNombre,
+          f.Grupo,
           p.Estado,
           p.EstadoPartido,
           p.ArbitroId,
@@ -42,6 +42,7 @@ export async function GET(
         FROM Partidos p
         INNER JOIN Torneos t ON p.TorneoId = t.IdTorneo
         INNER JOIN Deportes d ON t.IdDeporte = d.IdDeporte
+        LEFT JOIN Fixtures f ON p.FixtureIdFixture = f.IdFixture
         LEFT JOIN Participantes part1 ON p.ParticipanteAId = part1.IdParticipante
         LEFT JOIN Participantes part2 ON p.ParticipanteBId = part2.IdParticipante
         LEFT JOIN Equipos e1 ON part1.EquipoId = e1.IdEquipo
@@ -80,7 +81,7 @@ export async function GET(
       ParticipanteBId: partido.ParticipanteBId,
       ParticipanteA: partido.ParticipanteA || "TBD",
       ParticipanteB: partido.ParticipanteB || "TBD",
-      Fase: partido.Fase,
+      FixtureNombre: partido.FixtureNombre || "Sin fixture",
       Grupo: partido.Grupo,
       Lugar: partido.Lugar,
       Estado: partido.Estado,

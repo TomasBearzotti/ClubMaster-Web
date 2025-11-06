@@ -4,28 +4,31 @@ export async function GET() {
   try {
     const tiposTorneo = [
       {
-        id: "eliminacion",
-        nombre: "Eliminación Directa",
-        descripcion: "Los perdedores son eliminados inmediatamente",
-        requierePotenciaDe2: true,
-        minParticipantes: 2,
-        validacion: "Ideal para 4, 8, 16 participantes",
-      },
-      {
-        id: "todos-contra-todos",
-        nombre: "Todos contra Todos",
-        descripcion: "Cada participante juega contra todos los demás",
+        id: "0",
+        valor: 0,
+        nombre: "Liga (Todos contra Todos)",
+        descripcion: "Cada participante juega contra todos los demás una vez. Se genera una tabla de posiciones.",
         requierePotenciaDe2: false,
         minParticipantes: 3,
-        validacion: "Mínimo 3 participantes, máximo recomendado 8",
+        validacion: "Mínimo 3 participantes, máximo recomendado 16",
       },
       {
-        id: "grupos",
-        nombre: "Fase de Grupos",
-        descripcion: "Participantes divididos en grupos, luego eliminación",
+        id: "1",
+        valor: 1,
+        nombre: "Eliminación Directa",
+        descripcion: "Sistema de bracket donde el perdedor queda eliminado inmediatamente",
+        requierePotenciaDe2: true,
+        minParticipantes: 2,
+        validacion: "Ideal para 2, 4, 8, 16, 32 participantes",
+      },
+      {
+        id: "2",
+        valor: 2,
+        nombre: "Fase de Grupos + Eliminación",
+        descripcion: "Primero grupos todos contra todos, luego eliminación directa con clasificados",
         requierePotenciaDe2: false,
         minParticipantes: 6,
-        validacion: "Mínimo 6 participantes para formar grupos",
+        validacion: "Mínimo 6 participantes (2 grupos de 3)",
       },
     ]
 

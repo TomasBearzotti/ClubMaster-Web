@@ -13,11 +13,12 @@ export async function GET(request: NextRequest) {
       d.Nombre AS NombreDeporte,
       t.FechaInicio,
       t.Estado,
+      t.TipoTorneo,
       COUNT(p.IdParticipante) as Participantes
     FROM Torneos t
     INNER JOIN Deportes d ON t.IdDeporte = d.IdDeporte
     LEFT JOIN Participantes p ON t.IdTorneo = p.TorneoId
-    GROUP BY t.IdTorneo, t.Nombre, t.IdDeporte, d.Nombre, t.FechaInicio, t.Estado
+    GROUP BY t.IdTorneo, t.Nombre, t.IdDeporte, d.Nombre, t.FechaInicio, t.Estado, t.TipoTorneo
     ORDER BY t.FechaInicio DESC
     `);
 
@@ -52,6 +53,8 @@ export async function POST(request: NextRequest) {
 
     const pool = await getConnection();
 
+    // TipoTorneo se define cuando se genera el fixture, no al crear el torneo
+    // Por defecto es NULL hasta que se genere el fixture
     await pool
       .request()
       .input("nombre", sql.NVarChar, nombre)
@@ -67,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: "Torneo creado exitosamente",
+      message: "Torneo creado exitosamente. El tipo de fixture se definirá al generar el fixture.",
     });
   } catch (error) {
     console.error("Error creating torneo:", error);

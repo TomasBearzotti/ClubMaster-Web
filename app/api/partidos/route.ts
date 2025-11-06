@@ -17,9 +17,12 @@ export async function GET(request: NextRequest) {
     pa.Nombre as ParticipanteA,
     pb.Nombre as ParticipanteB,
     p.FechaHora,
-    p.Fase,
     p.Lugar,
-    p.Estado
+    p.Estado,
+    p.FixtureIdFixture,
+    f.Nombre as FixtureNombre,
+    f.NumeroRonda,
+    f.Grupo
     ${
       includeStats
         ? `, 
@@ -32,8 +35,9 @@ export async function GET(request: NextRequest) {
     }
   FROM Partidos p
   INNER JOIN Torneos t ON p.TorneoId = t.IdTorneo
-  INNER JOIN Participantes pa ON p.ParticipanteAId = pa.IdParticipante
+  LEFT JOIN Participantes pa ON p.ParticipanteAId = pa.IdParticipante
   LEFT JOIN Participantes pb ON p.ParticipanteBId = pb.IdParticipante
+  LEFT JOIN Fixtures f ON p.FixtureIdFixture = f.IdFixture
 `
 
     if (torneoId) {
@@ -59,13 +63,31 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { torneoId, participanteAId, participanteBId, fechaHora, fase, lugar, arbitroId } = await request.json()
+    const { torneoId, participanteAId, participanteBId, fechaHora, fixtureId, lugar, arbitroId } = await request.json()
 
-    if (!torneoId || !participanteAId || !fase || !lugar) {
-      return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 })
+    if (!torneoId || !participanteAId || !fixtureId || !lugar) {
+      return NextResponse.json({ 
+        error: "Faltan campos requeridos: torneoId, participanteAId, fixtureId, lugar" 
+      }, { status: 400 })
     }
 
     const pool = await getConnection()
+
+    // Verificar que el fixture pertenece al torneo
+    const fixtureValidation = await pool
+      .request()
+      .input("fixtureId", sql.Int, fixtureId)
+      .input("torneoId", sql.Int, torneoId)
+      .query(`
+        SELECT IdFixture FROM Fixtures 
+        WHERE IdFixture = @fixtureId AND TorneoId = @torneoId
+      `)
+
+    if (fixtureValidation.recordset.length === 0) {
+      return NextResponse.json({ 
+        error: "El fixture no pertenece al torneo especificado" 
+      }, { status: 400 })
+    }
 
     const result = await pool
       .request()
@@ -73,13 +95,13 @@ export async function POST(request: NextRequest) {
       .input("participanteAId", sql.Int, participanteAId)
       .input("participanteBId", sql.Int, participanteBId || null)
       .input("fechaHora", sql.DateTime, fechaHora ? new Date(fechaHora) : null)
-      .input("fase", sql.NVarChar, fase)
+      .input("fixtureId", sql.Int, fixtureId)
       .input("lugar", sql.NVarChar, lugar)
       .input("arbitroId", sql.Int, arbitroId || null)
       .query(`
-        INSERT INTO Partidos (TorneoId, ParticipanteAId, ParticipanteBId, FechaHora, Fase, Lugar, Estado, ArbitroId)
+        INSERT INTO Partidos (TorneoId, ParticipanteAId, ParticipanteBId, FechaHora, FixtureIdFixture, Lugar, Estado, ArbitroId)
         OUTPUT INSERTED.IdPartido
-        VALUES (@torneoId, @participanteAId, @participanteBId, @fechaHora, @fase, @lugar, 0, @arbitroId)
+        VALUES (@torneoId, @participanteAId, @participanteBId, @fechaHora, @fixtureId, @lugar, 0, @arbitroId)
       `)
 
     return NextResponse.json({

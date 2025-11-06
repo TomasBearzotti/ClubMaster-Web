@@ -66,7 +66,7 @@ interface PartidoDetalle {
   ParticipanteBId: number;
   ParticipanteA: string;
   ParticipanteB: string;
-  Fase: string;
+  FixtureNombre: string; // Nombre del fixture (antes Fase)
   Lugar: string;
   EstadoPartido: string;
   ArbitroId?: number;
@@ -438,7 +438,7 @@ export default function PartidoDetallePage() {
                 </CardTitle>
                 <div className="flex items-center justify-center gap-4 mt-4">
                   <Badge variant="outline" className="text-sm">
-                    {partido.Fase}
+                    {partido.FixtureNombre}
                   </Badge>
                   {getEstadoBadge(partido.EstadoPartido)}
                 </div>

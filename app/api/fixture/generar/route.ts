@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getConnection, sql } from "@/lib/sql-server"
+import { FixtureContext, TipoTorneo } from "@/lib/services/fixtures"
+import type { Participante } from "@/lib/services/fixtures"
 
 export async function POST(request: NextRequest) {
   try {
@@ -7,6 +9,18 @@ export async function POST(request: NextRequest) {
 
     if (!torneoId) {
       return NextResponse.json({ error: "TorneoId es requerido" }, { status: 400 })
+    }
+
+    if (tipoFixture === undefined || tipoFixture === null) {
+      return NextResponse.json({ error: "tipoFixture es requerido" }, { status: 400 })
+    }
+
+    // Validar que tipoFixture sea válido (0, 1, 2)
+    const tipoTorneo = Number.parseInt(tipoFixture)
+    if (isNaN(tipoTorneo) || tipoTorneo < 0 || tipoTorneo > 2) {
+      return NextResponse.json({ 
+        error: "tipoFixture inválido. Valores permitidos: 0 (Liga), 1 (Eliminación), 2 (Grupos+Eliminación)" 
+      }, { status: 400 })
     }
 
     const pool = await getConnection()
@@ -19,7 +33,6 @@ export async function POST(request: NextRequest) {
         SELECT 
           IdTorneo,
           Nombre,
-          Disciplina,
           MaxParticipantes,
           FechaInicio,
           FechaFin
@@ -39,12 +52,14 @@ export async function POST(request: NextRequest) {
       .input("torneoId", sql.Int, torneoId)
       .query(`
         SELECT COUNT(*) as Total 
-        FROM Partidos 
+        FROM Fixtures 
         WHERE TorneoId = @torneoId
       `)
 
     if (fixtureExistente.recordset[0].Total > 0) {
-      return NextResponse.json({ error: "Ya existe un fixture para este torneo" }, { status: 400 })
+      return NextResponse.json({ 
+        error: "Ya existe un fixture para este torneo. Elimina el fixture existente antes de generar uno nuevo." 
+      }, { status: 400 })
     }
 
     // Obtener participantes del torneo
@@ -55,148 +70,143 @@ export async function POST(request: NextRequest) {
         SELECT 
           IdParticipante,
           Nombre,
-          EsEquipo
+          EsEquipo,
+          SocioId,
+          EquipoId
         FROM Participantes
         WHERE TorneoId = @torneoId
         ORDER BY Nombre
       `)
 
-    const participantes = participantesResult.recordset
-    const numParticipantes = participantes.length
+    const participantes: Participante[] = participantesResult.recordset
 
-    if (numParticipantes < 2) {
+    if (participantes.length < 2) {
       return NextResponse.json(
         { error: "Se necesitan al menos 2 participantes para generar un fixture" },
         { status: 400 },
       )
     }
 
-    // Generar fixture según tipo
-    let partidos = []
-    const tipoSeleccionado = tipoFixture || "eliminacion"
+    // Crear el contexto con la estrategia apropiada
+    const fixtureContext = new FixtureContext(tipoTorneo as TipoTorneo)
 
-    if (tipoSeleccionado === "eliminacion") {
-      // Fixture de eliminación directa
-      partidos = generarFixtureEliminacion(participantes)
-    } else if (tipoSeleccionado === "todos-contra-todos") {
-      // Fixture todos contra todos
-      partidos = generarFixtureTodosContraTodos(participantes)
-    } else if (tipoSeleccionado === "grupos") {
-      // Fixture por grupos
-      partidos = generarFixtureGrupos(participantes)
+    // Validar participantes según el tipo de torneo
+    const validacion = fixtureContext.validarParticipantes(participantes)
+    if (!validacion.valido) {
+      return NextResponse.json({ 
+        error: validacion.mensaje 
+      }, { status: 400 })
     }
 
-    // Insertar partidos en la base de datos
+    // Generar fixtures y partidos usando la estrategia
+    const fixtureGenerado = fixtureContext.generarFixtures({
+      torneoId,
+      participantes,
+      fechaInicio: torneo.FechaInicio,
+      fechaFin: torneo.FechaFin
+    })
+
+    // Insertar en la base de datos usando transacción
     const transaction = pool.transaction()
     await transaction.begin()
 
     try {
-      for (const partido of partidos) {
-        await transaction
+      const fixtureIdsMap = new Map<number, number>() // índice temporal -> ID real
+
+      // 1. Actualizar TipoTorneo del torneo con el tipo seleccionado
+      await transaction
+        .request()
+        .input("torneoId", sql.Int, torneoId)
+        .input("tipoTorneo", sql.Int, tipoTorneo)
+        .query(`UPDATE Torneos SET TipoTorneo = @tipoTorneo WHERE IdTorneo = @torneoId`)
+
+      // 2. Insertar Fixtures
+      for (let i = 0; i < fixtureGenerado.fixtures.length; i++) {
+        const fixture = fixtureGenerado.fixtures[i]
+        
+        const result = await transaction
           .request()
-          .input("torneoId", sql.Int, torneoId)
-          .input("participanteAId", sql.Int, partido.participanteAId)
-          .input("participanteBId", sql.Int, partido.participanteBId)
-          .input("fase", sql.NVarChar, partido.fase)
-          .input("grupo", sql.NVarChar, partido.grupo || null)
-          .input("lugar", sql.NVarChar, "Por definir")
-          .input("estado", sql.Int, 0) // 0 = Programado
-          .input("estadoPartido", sql.NVarChar, "Programado")
+          .input("tipo", sql.Int, fixture.Tipo)
+          .input("torneoId", sql.Int, fixture.TorneoId)
+          .input("nombre", sql.NVarChar, fixture.Nombre)
+          .input("numeroRonda", sql.Int, fixture.NumeroRonda)
+          .input("grupo", sql.NVarChar, fixture.Grupo)
+          .input("fechaInicio", sql.DateTime2, fixture.FechaInicio)
+          .input("fechaFin", sql.DateTime2, fixture.FechaFin)
           .query(`
-            INSERT INTO Partidos (
-              TorneoId, ParticipanteAId, ParticipanteBId, 
-              Fase, Grupo, Lugar, Estado, EstadoPartido,
-              FechaHora
-            )
-            VALUES (
-              @torneoId, @participanteAId, @participanteBId,
-              @fase, @grupo, @lugar, @estado, @estadoPartido,
-              '1900-01-01 00:00:00'
-            )
+            INSERT INTO Fixtures (Tipo, TorneoId, Nombre, NumeroRonda, Grupo, FechaInicio, FechaFin)
+            OUTPUT INSERTED.IdFixture
+            VALUES (@tipo, @torneoId, @nombre, @numeroRonda, @grupo, @fechaInicio, @fechaFin)
           `)
+
+        const idFixture = result.recordset[0].IdFixture
+        fixtureIdsMap.set(i, idFixture)
+      }
+
+      // 3. Insertar Partidos con los IDs reales de fixtures
+      for (const partido of fixtureGenerado.partidos) {
+        const fixtureIdReal = fixtureIdsMap.get(partido.FixtureId ?? 0)
+        
+        const request = transaction.request()
+          .input("torneoId", sql.Int, torneoId)
+          .input("fixtureId", sql.Int, fixtureIdReal)
+          .input("fechaHora", sql.DateTime2, partido.FechaHora ?? new Date('1900-01-01'))
+          .input("lugar", sql.NVarChar, partido.Lugar ?? "Por definir")
+          .input("estado", sql.Int, partido.Estado ?? 0)
+          .input("estadoPartido", sql.NVarChar, partido.EstadoPartido ?? "Programado")
+        
+        // Agregar participantes solo si no son null (permitir TBD)
+        if (partido.ParticipanteAId !== null) {
+          request.input("participanteAId", sql.Int, partido.ParticipanteAId)
+        } else {
+          request.input("participanteAId", sql.Int, null)
+        }
+        
+        if (partido.ParticipanteBId !== null) {
+          request.input("participanteBId", sql.Int, partido.ParticipanteBId)
+        } else {
+          request.input("participanteBId", sql.Int, null)
+        }
+        
+        if (partido.ArbitroId !== null) {
+          request.input("arbitroId", sql.Int, partido.ArbitroId)
+        } else {
+          request.input("arbitroId", sql.Int, null)
+        }
+        
+        await request.query(`
+          INSERT INTO Partidos (
+            TorneoId, ParticipanteAId, ParticipanteBId, 
+            FixtureIdFixture, FechaHora, Lugar, Estado, EstadoPartido, ArbitroId
+          )
+          VALUES (
+            @torneoId, @participanteAId, @participanteBId,
+            @fixtureId, @fechaHora, @lugar, @estado, @estadoPartido, @arbitroId
+          )
+        `)
       }
 
       await transaction.commit()
 
       return NextResponse.json({
         success: true,
-        message: `Fixture generado correctamente. ${partidos.length} partidos creados sin fechas. Puedes asignar fechas individualmente.`,
-        partidosGenerados: partidos.length,
-        tipoFixture: tipoSeleccionado,
+        message: `Fixture generado exitosamente usando estrategia: ${fixtureContext.getInfo().nombre}`,
+        fixturesGenerados: fixtureGenerado.fixtures.length,
+        partidosGenerados: fixtureGenerado.partidos.length,
+        tipoTorneoSeleccionado: tipoTorneo,
+        tipoTorneoNombre: fixtureContext.getInfo().nombre,
+        metadata: fixtureGenerado.metadata,
+        validacion: validacion.mensaje,
       })
     } catch (error) {
       await transaction.rollback()
       throw error
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error generating fixture:", error)
-    return NextResponse.json({ error: "Error al generar fixture" }, { status: 500 })
+    return NextResponse.json({ 
+      error: "Error al generar fixture", 
+      details: error.message 
+    }, { status: 500 })
   }
-}
-
-function generarFixtureEliminacion(participantes: any[]): any[] {
-  const partidos: any[] = []
-
-  // Primera ronda - enfrentar participantes de a pares
-  for (let i = 0; i < participantes.length - 1; i += 2) {
-    if (i + 1 < participantes.length) {
-      partidos.push({
-        participanteAId: participantes[i].IdParticipante,
-        participanteBId: participantes[i + 1].IdParticipante,
-        fase: "Primera Ronda",
-        grupo: null,
-      })
-    }
-  }
-
-  // Si hay número impar, el último pasa directo
-  if (participantes.length % 2 !== 0) {
-    console.log("Participante con bye:", participantes[participantes.length - 1].Nombre)
-  }
-
-  return partidos
-}
-
-function generarFixtureTodosContraTodos(participantes: any[]): any[] {
-  const partidos: any[] = []
-
-  for (let i = 0; i < participantes.length; i++) {
-    for (let j = i + 1; j < participantes.length; j++) {
-      partidos.push({
-        participanteAId: participantes[i].IdParticipante,
-        participanteBId: participantes[j].IdParticipante,
-        fase: "Fase Regular",
-        grupo: null,
-      })
-    }
-  }
-
-  return partidos
-}
-
-function generarFixtureGrupos(participantes: any[]): any[] {
-  const partidos: any[] = []
-  const participantesPorGrupo = 4
-  const numeroGrupos = Math.ceil(participantes.length / participantesPorGrupo)
-
-  // Dividir participantes en grupos
-  for (let grupo = 0; grupo < numeroGrupos; grupo++) {
-    const inicioGrupo = grupo * participantesPorGrupo
-    const finGrupo = Math.min(inicioGrupo + participantesPorGrupo, participantes.length)
-    const participantesGrupo = participantes.slice(inicioGrupo, finGrupo)
-
-    // Generar partidos dentro del grupo (todos contra todos)
-    for (let i = 0; i < participantesGrupo.length; i++) {
-      for (let j = i + 1; j < participantesGrupo.length; j++) {
-        partidos.push({
-          participanteAId: participantesGrupo[i].IdParticipante,
-          participanteBId: participantesGrupo[j].IdParticipante,
-          fase: "Fase de Grupos",
-          grupo: String.fromCharCode(65 + grupo), // A, B, C, etc.
-        })
-      }
-    }
-  }
-
-  return partidos
 }

@@ -56,6 +56,7 @@ import {
   Clock,
   Save,
   X,
+  Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -73,6 +74,7 @@ interface Torneo {
 
 interface TipoTorneo {
   id: string;
+  valor: number; // Valor numérico para enviar al API: 0=Liga, 1=Eliminación, 2=Grupos
   nombre: string;
   descripcion: string;
   requierePotenciaDe2: boolean;
@@ -90,10 +92,11 @@ interface Validacion {
 interface Partido {
   IdPartido: number;
   FechaHora?: string;
-  ParticipanteA: string;
-  ParticipanteB: string;
-  Fase: string;
-  Grupo?: string;
+  ParticipanteA: string | null; // Puede ser null para partidos TBD (To Be Determined)
+  ParticipanteB: string | null; // Puede ser null para partidos TBD (To Be Determined)
+  FixtureNombre: string; // Nombre del fixture (ej: "Fecha 1", "Semifinal", "Grupo A")
+  NumeroRonda?: number; // Número de ronda del fixture
+  Grupo?: string; // Grupo del fixture (si aplica)
   Lugar: string;
   Estado: number;
   ArbitroNombre?: string;
@@ -116,12 +119,13 @@ export default function GenerarFixturePage() {
   const [errorTorneos, setErrorTorneos] = useState<string | null>(null);
 
   const [selectedTorneo, setSelectedTorneo] = useState<Torneo | null>(null);
-  const [tipoFixture, setTipoFixture] = useState("eliminacion");
+  const [tipoFixture, setTipoFixture] = useState("0"); // "0" = Liga (por defecto)
   const [validacion, setValidacion] = useState<Validacion | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [fixtureGenerado, setFixtureGenerado] = useState(false);
   const [partidos, setPartidos] = useState<Partido[]>([]);
   const [activeTab, setActiveTab] = useState("calendario");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Estados para edición de partidos
   const [editingPartido, setEditingPartido] = useState<Partido | null>(null);
@@ -203,6 +207,7 @@ export default function GenerarFixturePage() {
     setFixtureGenerado(false);
     setPartidos([]);
     setValidacion(null);
+    setTipoFixture("0"); // Reset tipo fixture
 
     // Cargar partidos existentes si los hay
     if (torneo) {
@@ -216,12 +221,20 @@ export default function GenerarFixturePage() {
     setIsGenerating(true);
 
     try {
+      // Encontrar el tipo de torneo seleccionado para obtener su valor numérico
+      const tipoSeleccionado = tiposTorneo.find((t) => t.id === tipoFixture);
+      if (!tipoSeleccionado) {
+        alert("Error: Tipo de fixture no válido");
+        setIsGenerating(false);
+        return;
+      }
+
       const response = await fetch("/api/fixture/generar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           torneoId: selectedTorneo.IdTorneo,
-          tipoFixture,
+          tipoFixture: tipoSeleccionado.valor, // Enviar el valor numérico (0, 1, 2)
         }),
       });
 
@@ -295,6 +308,63 @@ export default function GenerarFixturePage() {
       alert("Error al guardar partido");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleRegenerarFixture = async () => {
+    if (!selectedTorneo) return;
+
+    // Validar que el torneo esté en estado Pendiente
+    if (selectedTorneo.Estado !== 0) {
+      alert("Solo se puede regenerar el fixture de torneos en estado Pendiente.");
+      return;
+    }
+
+    const confirmacion = confirm(
+      `¿Estás seguro de que deseas ELIMINAR el fixture actual del torneo "${selectedTorneo.Nombre}"?\n\n` +
+      `Se eliminarán:\n` +
+      `- Todos los fixtures generados\n` +
+      `- Todos los ${partidos.length} partidos\n` +
+      `- Todas las asignaciones de árbitros\n\n` +
+      `Esta acción NO se puede deshacer.`
+    );
+
+    if (!confirmacion) return;
+
+    setIsDeleting(true);
+
+    try {
+      const response = await fetch("/api/fixture/eliminar", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          torneoId: selectedTorneo.IdTorneo,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        alert(`✓ ${result.message}\n\nAhora puedes generar un nuevo fixture con los ${selectedTorneo.Participantes} participantes actuales.`);
+        
+        // Resetear estados para volver a la configuración inicial
+        setFixtureGenerado(false);
+        setPartidos([]);
+        setValidacion(null);
+        setTipoFixture("0");
+        
+        // Validar con el tipo de fixture por defecto
+        if (selectedTorneo) {
+          validarTorneo();
+        }
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.error}`);
+      }
+    } catch (error) {
+      console.error("Error eliminando fixture:", error);
+      alert("Error al eliminar fixture");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -647,6 +717,40 @@ export default function GenerarFixturePage() {
               </AlertDescription>
             </Alert>
 
+            {/* Botón para regenerar fixture (solo si el torneo está pendiente) */}
+            {selectedTorneo?.Estado === 0 && (
+              <Alert className="mb-6 border-yellow-200 bg-yellow-50">
+                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                <AlertTitle className="text-yellow-800 mb-2">Regenerar Fixture</AlertTitle>
+                <AlertDescription className="text-yellow-700">
+                  <div className="flex items-center justify-between">
+                    <span>
+                      ¿Necesitas agregar más participantes o cambiar el tipo de torneo?
+                      Puedes eliminar el fixture actual y generar uno nuevo.
+                    </span>
+                    <Button
+                      onClick={handleRegenerarFixture}
+                      disabled={isDeleting}
+                      variant="destructive"
+                      className="ml-4"
+                    >
+                      {isDeleting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Eliminando...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Regenerar Fixture
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <Card className="mb-6">
               <CardHeader>
                 <div className="flex justify-between items-center">
@@ -704,7 +808,7 @@ export default function GenerarFixturePage() {
                             <TableRow>
                               <TableHead>Participante A</TableHead>
                               <TableHead>Participante B</TableHead>
-                              <TableHead>Fase</TableHead>
+                              <TableHead>Fixture</TableHead>
                               <TableHead>Lugar</TableHead>
                               <TableHead>Estado</TableHead>
                               <TableHead>Acciones</TableHead>
@@ -714,12 +818,16 @@ export default function GenerarFixturePage() {
                             {partidosSinFecha.map((partido) => (
                               <TableRow key={partido.IdPartido}>
                                 <TableCell className="font-medium">
-                                  {partido.ParticipanteA}
+                                  {partido.ParticipanteA || (
+                                    <span className="text-gray-400 italic">TBD</span>
+                                  )}
                                 </TableCell>
                                 <TableCell className="font-medium">
-                                  {partido.ParticipanteB}
+                                  {partido.ParticipanteB || (
+                                    <span className="text-gray-400 italic">TBD</span>
+                                  )}
                                 </TableCell>
-                                <TableCell>{partido.Fase}</TableCell>
+                                <TableCell>{partido.FixtureNombre}</TableCell>
                                 <TableCell>{partido.Lugar}</TableCell>
                                 <TableCell>
                                   {getEstadoPartidoBadge(partido.Estado)}
@@ -730,6 +838,7 @@ export default function GenerarFixturePage() {
                                     variant="outline"
                                     onClick={() => handleEditarPartido(partido)}
                                     className="text-xs"
+                                    disabled={!partido.ParticipanteA || !partido.ParticipanteB}
                                   >
                                     <Edit className="h-3 w-3 mr-1" />
                                     Editar
@@ -766,7 +875,7 @@ export default function GenerarFixturePage() {
                                   <TableHead>Hora</TableHead>
                                   <TableHead>Participante A</TableHead>
                                   <TableHead>Participante B</TableHead>
-                                  <TableHead>Fase</TableHead>
+                                  <TableHead>Fixture</TableHead>
                                   <TableHead>Lugar</TableHead>
                                   <TableHead>Estado</TableHead>
                                   <TableHead>Acciones</TableHead>
@@ -790,12 +899,16 @@ export default function GenerarFixturePage() {
                                           : "Sin hora"}
                                       </TableCell>
                                       <TableCell className="font-medium">
-                                        {partido.ParticipanteA}
+                                        {partido.ParticipanteA || (
+                                          <span className="text-gray-400 italic">TBD</span>
+                                        )}
                                       </TableCell>
                                       <TableCell className="font-medium">
-                                        {partido.ParticipanteB}
+                                        {partido.ParticipanteB || (
+                                          <span className="text-gray-400 italic">TBD</span>
+                                        )}
                                       </TableCell>
-                                      <TableCell>{partido.Fase}</TableCell>
+                                      <TableCell>{partido.FixtureNombre}</TableCell>
                                       <TableCell>{partido.Lugar}</TableCell>
                                       <TableCell>
                                         {getEstadoPartidoBadge(partido.Estado)}
@@ -808,6 +921,7 @@ export default function GenerarFixturePage() {
                                             handleEditarPartido(partido)
                                           }
                                           className="text-xs"
+                                          disabled={!partido.ParticipanteA || !partido.ParticipanteB}
                                         >
                                           <Edit className="h-3 w-3 mr-1" />
                                           Editar
@@ -828,12 +942,12 @@ export default function GenerarFixturePage() {
                   </TabsContent>
 
                   <TabsContent value="fases" className="mt-4">
-                    {Array.from(new Set(partidos.map((p) => p.Fase))).map(
-                      (fase) => (
-                        <div key={fase} className="mb-6">
+                    {Array.from(new Set(partidos.map((p) => p.FixtureNombre))).map(
+                      (fixtureName) => (
+                        <div key={fixtureName} className="mb-6">
                           <h3 className="text-lg font-semibold mb-3 flex items-center gap-2 text-blue-800">
                             <Trophy className="h-5 w-5" />
-                            {fase}
+                            {fixtureName}
                           </h3>
                           <Table>
                             <TableHeader>
@@ -851,7 +965,7 @@ export default function GenerarFixturePage() {
                             </TableHeader>
                             <TableBody>
                               {partidos
-                                .filter((p) => p.Fase === fase)
+                                .filter((p) => p.FixtureNombre === fixtureName)
                                 .sort((a, b) =>
                                   (a.FechaHora || "").localeCompare(
                                     b.FechaHora || ""
