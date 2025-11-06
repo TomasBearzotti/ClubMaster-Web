@@ -1,13 +1,13 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { getConnection, sql } from "@/lib/sql-server"
+import { type NextRequest, NextResponse } from "next/server";
+import { getConnection, sql } from "@/lib/sql-server";
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const torneoId = searchParams.get("torneoId")
-    const includeStats = searchParams.get("includeStats") === "true"
+    const { searchParams } = new URL(request.url);
+    const torneoId = searchParams.get("torneoId");
+    const includeStats = searchParams.get("includeStats") === "true";
 
-    const pool = await getConnection()
+    const pool = await getConnection();
 
     let query = `
   SELECT 
@@ -38,55 +38,72 @@ export async function GET(request: NextRequest) {
   LEFT JOIN Participantes pa ON p.ParticipanteAId = pa.IdParticipante
   LEFT JOIN Participantes pb ON p.ParticipanteBId = pb.IdParticipante
   LEFT JOIN Fixtures f ON p.FixtureIdFixture = f.IdFixture
-`
+`;
 
     if (torneoId) {
-      query += ` WHERE p.TorneoId = @torneoId`
+      query += ` WHERE p.TorneoId = @torneoId`;
     }
 
-    query += ` ORDER BY p.FechaHora DESC, p.IdPartido DESC`
+    query += ` ORDER BY p.FechaHora DESC, p.IdPartido DESC`;
 
-    const request_query = pool.request()
+    const request_query = pool.request();
 
     if (torneoId) {
-      request_query.input("torneoId", sql.Int, Number.parseInt(torneoId))
+      request_query.input("torneoId", sql.Int, Number.parseInt(torneoId));
     }
 
-    const result = await request_query.query(query)
+    const result = await request_query.query(query);
 
-    return NextResponse.json(result.recordset)
+    return NextResponse.json(result.recordset);
   } catch (error) {
-    console.error("Error fetching partidos:", error)
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+    console.error("Error fetching partidos:", error);
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { torneoId, participanteAId, participanteBId, fechaHora, fixtureId, lugar, arbitroId } = await request.json()
+    const {
+      torneoId,
+      participanteAId,
+      participanteBId,
+      fechaHora,
+      fixtureId,
+      lugar,
+      arbitroId,
+    } = await request.json();
 
     if (!torneoId || !participanteAId || !fixtureId || !lugar) {
-      return NextResponse.json({ 
-        error: "Faltan campos requeridos: torneoId, participanteAId, fixtureId, lugar" 
-      }, { status: 400 })
+      return NextResponse.json(
+        {
+          error:
+            "Faltan campos requeridos: torneoId, participanteAId, fixtureId, lugar",
+        },
+        { status: 400 }
+      );
     }
 
-    const pool = await getConnection()
+    const pool = await getConnection();
 
     // Verificar que el fixture pertenece al torneo
     const fixtureValidation = await pool
       .request()
       .input("fixtureId", sql.Int, fixtureId)
-      .input("torneoId", sql.Int, torneoId)
-      .query(`
+      .input("torneoId", sql.Int, torneoId).query(`
         SELECT IdFixture FROM Fixtures 
         WHERE IdFixture = @fixtureId AND TorneoId = @torneoId
-      `)
+      `);
 
     if (fixtureValidation.recordset.length === 0) {
-      return NextResponse.json({ 
-        error: "El fixture no pertenece al torneo especificado" 
-      }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: "El fixture no pertenece al torneo especificado",
+        },
+        { status: 400 }
+      );
     }
 
     const result = await pool
@@ -97,20 +114,22 @@ export async function POST(request: NextRequest) {
       .input("fechaHora", sql.DateTime, fechaHora ? new Date(fechaHora) : null)
       .input("fixtureId", sql.Int, fixtureId)
       .input("lugar", sql.NVarChar, lugar)
-      .input("arbitroId", sql.Int, arbitroId || null)
-      .query(`
+      .input("arbitroId", sql.Int, arbitroId || null).query(`
         INSERT INTO Partidos (TorneoId, ParticipanteAId, ParticipanteBId, FechaHora, FixtureIdFixture, Lugar, Estado, ArbitroId)
         OUTPUT INSERTED.IdPartido
         VALUES (@torneoId, @participanteAId, @participanteBId, @fechaHora, @fixtureId, @lugar, 0, @arbitroId)
-      `)
+      `);
 
     return NextResponse.json({
       success: true,
       partidoId: result.recordset[0].IdPartido,
       message: "Partido creado exitosamente",
-    })
+    });
   } catch (error) {
-    console.error("Error creating partido:", error)
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+    console.error("Error creating partido:", error);
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 }
+    );
   }
 }

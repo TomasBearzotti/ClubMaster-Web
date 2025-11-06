@@ -316,17 +316,19 @@ export default function GenerarFixturePage() {
 
     // Validar que el torneo esté en estado Pendiente
     if (selectedTorneo.Estado !== 0) {
-      alert("Solo se puede regenerar el fixture de torneos en estado Pendiente.");
+      alert(
+        "Solo se puede regenerar el fixture de torneos en estado Pendiente."
+      );
       return;
     }
 
     const confirmacion = confirm(
       `¿Estás seguro de que deseas ELIMINAR el fixture actual del torneo "${selectedTorneo.Nombre}"?\n\n` +
-      `Se eliminarán:\n` +
-      `- Todos los fixtures generados\n` +
-      `- Todos los ${partidos.length} partidos\n` +
-      `- Todas las asignaciones de árbitros\n\n` +
-      `Esta acción NO se puede deshacer.`
+        `Se eliminarán:\n` +
+        `- Todos los fixtures generados\n` +
+        `- Todos los ${partidos.length} partidos\n` +
+        `- Todas las asignaciones de árbitros\n\n` +
+        `Esta acción NO se puede deshacer.`
     );
 
     if (!confirmacion) return;
@@ -344,14 +346,16 @@ export default function GenerarFixturePage() {
 
       if (response.ok) {
         const result = await response.json();
-        alert(`✓ ${result.message}\n\nAhora puedes generar un nuevo fixture con los ${selectedTorneo.Participantes} participantes actuales.`);
-        
+        alert(
+          `✓ ${result.message}\n\nAhora puedes generar un nuevo fixture con los ${selectedTorneo.Participantes} participantes actuales.`
+        );
+
         // Resetear estados para volver a la configuración inicial
         setFixtureGenerado(false);
         setPartidos([]);
         setValidacion(null);
         setTipoFixture("0");
-        
+
         // Validar con el tipo de fixture por defecto
         if (selectedTorneo) {
           validarTorneo();
@@ -721,12 +725,15 @@ export default function GenerarFixturePage() {
             {selectedTorneo?.Estado === 0 && (
               <Alert className="mb-6 border-yellow-200 bg-yellow-50">
                 <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                <AlertTitle className="text-yellow-800 mb-2">Regenerar Fixture</AlertTitle>
+                <AlertTitle className="text-yellow-800 mb-2">
+                  Regenerar Fixture
+                </AlertTitle>
                 <AlertDescription className="text-yellow-700">
                   <div className="flex items-center justify-between">
                     <span>
-                      ¿Necesitas agregar más participantes o cambiar el tipo de torneo?
-                      Puedes eliminar el fixture actual y generar uno nuevo.
+                      ¿Necesitas agregar más participantes o cambiar el tipo de
+                      torneo? Puedes eliminar el fixture actual y generar uno
+                      nuevo.
                     </span>
                     <Button
                       onClick={handleRegenerarFixture}
@@ -819,12 +826,16 @@ export default function GenerarFixturePage() {
                               <TableRow key={partido.IdPartido}>
                                 <TableCell className="font-medium">
                                   {partido.ParticipanteA || (
-                                    <span className="text-gray-400 italic">TBD</span>
+                                    <span className="text-gray-400 italic">
+                                      TBD
+                                    </span>
                                   )}
                                 </TableCell>
                                 <TableCell className="font-medium">
                                   {partido.ParticipanteB || (
-                                    <span className="text-gray-400 italic">TBD</span>
+                                    <span className="text-gray-400 italic">
+                                      TBD
+                                    </span>
                                   )}
                                 </TableCell>
                                 <TableCell>{partido.FixtureNombre}</TableCell>
@@ -838,7 +849,10 @@ export default function GenerarFixturePage() {
                                     variant="outline"
                                     onClick={() => handleEditarPartido(partido)}
                                     className="text-xs"
-                                    disabled={!partido.ParticipanteA || !partido.ParticipanteB}
+                                    disabled={
+                                      !partido.ParticipanteA ||
+                                      !partido.ParticipanteB
+                                    }
                                   >
                                     <Edit className="h-3 w-3 mr-1" />
                                     Editar
@@ -900,15 +914,21 @@ export default function GenerarFixturePage() {
                                       </TableCell>
                                       <TableCell className="font-medium">
                                         {partido.ParticipanteA || (
-                                          <span className="text-gray-400 italic">TBD</span>
+                                          <span className="text-gray-400 italic">
+                                            TBD
+                                          </span>
                                         )}
                                       </TableCell>
                                       <TableCell className="font-medium">
                                         {partido.ParticipanteB || (
-                                          <span className="text-gray-400 italic">TBD</span>
+                                          <span className="text-gray-400 italic">
+                                            TBD
+                                          </span>
                                         )}
                                       </TableCell>
-                                      <TableCell>{partido.FixtureNombre}</TableCell>
+                                      <TableCell>
+                                        {partido.FixtureNombre}
+                                      </TableCell>
                                       <TableCell>{partido.Lugar}</TableCell>
                                       <TableCell>
                                         {getEstadoPartidoBadge(partido.Estado)}
@@ -921,7 +941,10 @@ export default function GenerarFixturePage() {
                                             handleEditarPartido(partido)
                                           }
                                           className="text-xs"
-                                          disabled={!partido.ParticipanteA || !partido.ParticipanteB}
+                                          disabled={
+                                            !partido.ParticipanteA ||
+                                            !partido.ParticipanteB
+                                          }
                                         >
                                           <Edit className="h-3 w-3 mr-1" />
                                           Editar
@@ -942,89 +965,89 @@ export default function GenerarFixturePage() {
                   </TabsContent>
 
                   <TabsContent value="fases" className="mt-4">
-                    {Array.from(new Set(partidos.map((p) => p.FixtureNombre))).map(
-                      (fixtureName) => (
-                        <div key={fixtureName} className="mb-6">
-                          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2 text-blue-800">
-                            <Trophy className="h-5 w-5" />
-                            {fixtureName}
-                          </h3>
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Fecha</TableHead>
-                                <TableHead>Hora</TableHead>
-                                <TableHead>Participante A</TableHead>
-                                <TableHead>Participante B</TableHead>
-                                <TableHead>Lugar</TableHead>
-                                {partidos.some((p) => p.Grupo) && (
-                                  <TableHead>Grupo</TableHead>
-                                )}
-                                <TableHead>Acciones</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {partidos
-                                .filter((p) => p.FixtureNombre === fixtureName)
-                                .sort((a, b) =>
-                                  (a.FechaHora || "").localeCompare(
-                                    b.FechaHora || ""
-                                  )
+                    {Array.from(
+                      new Set(partidos.map((p) => p.FixtureNombre))
+                    ).map((fixtureName) => (
+                      <div key={fixtureName} className="mb-6">
+                        <h3 className="text-lg font-semibold mb-3 flex items-center gap-2 text-blue-800">
+                          <Trophy className="h-5 w-5" />
+                          {fixtureName}
+                        </h3>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Fecha</TableHead>
+                              <TableHead>Hora</TableHead>
+                              <TableHead>Participante A</TableHead>
+                              <TableHead>Participante B</TableHead>
+                              <TableHead>Lugar</TableHead>
+                              {partidos.some((p) => p.Grupo) && (
+                                <TableHead>Grupo</TableHead>
+                              )}
+                              <TableHead>Acciones</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {partidos
+                              .filter((p) => p.FixtureNombre === fixtureName)
+                              .sort((a, b) =>
+                                (a.FechaHora || "").localeCompare(
+                                  b.FechaHora || ""
                                 )
-                                .map((partido) => (
-                                  <TableRow key={partido.IdPartido}>
+                              )
+                              .map((partido) => (
+                                <TableRow key={partido.IdPartido}>
+                                  <TableCell>
+                                    {partido.FechaHora
+                                      ? format(
+                                          new Date(partido.FechaHora),
+                                          "dd/MM/yyyy"
+                                        )
+                                      : "Sin fecha"}
+                                  </TableCell>
+                                  <TableCell>
+                                    {partido.FechaHora
+                                      ? format(
+                                          new Date(partido.FechaHora),
+                                          "HH:mm"
+                                        )
+                                      : "Sin hora"}
+                                  </TableCell>
+                                  <TableCell className="font-medium">
+                                    {partido.ParticipanteA}
+                                  </TableCell>
+                                  <TableCell className="font-medium">
+                                    {partido.ParticipanteB}
+                                  </TableCell>
+                                  <TableCell>{partido.Lugar}</TableCell>
+                                  {partidos.some((p) => p.Grupo) && (
                                     <TableCell>
-                                      {partido.FechaHora
-                                        ? format(
-                                            new Date(partido.FechaHora),
-                                            "dd/MM/yyyy"
-                                          )
-                                        : "Sin fecha"}
+                                      {partido.Grupo && (
+                                        <Badge variant="secondary">
+                                          Grupo {partido.Grupo}
+                                        </Badge>
+                                      )}
                                     </TableCell>
-                                    <TableCell>
-                                      {partido.FechaHora
-                                        ? format(
-                                            new Date(partido.FechaHora),
-                                            "HH:mm"
-                                          )
-                                        : "Sin hora"}
-                                    </TableCell>
-                                    <TableCell className="font-medium">
-                                      {partido.ParticipanteA}
-                                    </TableCell>
-                                    <TableCell className="font-medium">
-                                      {partido.ParticipanteB}
-                                    </TableCell>
-                                    <TableCell>{partido.Lugar}</TableCell>
-                                    {partidos.some((p) => p.Grupo) && (
-                                      <TableCell>
-                                        {partido.Grupo && (
-                                          <Badge variant="secondary">
-                                            Grupo {partido.Grupo}
-                                          </Badge>
-                                        )}
-                                      </TableCell>
-                                    )}
-                                    <TableCell>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                          handleEditarPartido(partido)
-                                        }
-                                        className="text-xs"
-                                      >
-                                        <Edit className="h-3 w-3 mr-1" />
-                                        Editar
-                                      </Button>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      )
-                    )}
+                                  )}
+                                  <TableCell>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        handleEditarPartido(partido)
+                                      }
+                                      className="text-xs"
+                                    >
+                                      <Edit className="h-3 w-3 mr-1" />
+                                      Editar
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ))}
                   </TabsContent>
                 </Tabs>
               </CardContent>

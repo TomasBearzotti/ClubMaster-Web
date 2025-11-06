@@ -1278,25 +1278,25 @@ export default function TorneosPage() {
                                   </CardHeader>
                                   <CardContent className="pt-0">
                                     {!participantesPorTorneo[torneo.IdTorneo] ||
-                                    participantesPorTorneo[torneo.IdTorneo].length ===
-                                      0 ? (
+                                    participantesPorTorneo[torneo.IdTorneo]
+                                      .length === 0 ? (
                                       <p className="text-gray-500 text-center py-4 text-sm">
                                         No hay participantes inscritos
                                       </p>
                                     ) : (
                                       <div className="flex flex-wrap gap-2">
-                                        {participantesPorTorneo[torneo.IdTorneo].map(
-                                          (participante) => (
-                                            <Badge
-                                              key={participante.id}
-                                              variant="outline"
-                                              className="flex items-center gap-1 px-3 py-1"
-                                            >
-                                              {getParticipanteIcon(participante)}
-                                              <span>{participante.nombre}</span>
-                                            </Badge>
-                                          )
-                                        )}
+                                        {participantesPorTorneo[
+                                          torneo.IdTorneo
+                                        ].map((participante) => (
+                                          <Badge
+                                            key={participante.id}
+                                            variant="outline"
+                                            className="flex items-center gap-1 px-3 py-1"
+                                          >
+                                            {getParticipanteIcon(participante)}
+                                            <span>{participante.nombre}</span>
+                                          </Badge>
+                                        ))}
                                       </div>
                                     )}
                                   </CardContent>
@@ -1308,15 +1308,15 @@ export default function TorneosPage() {
                                     <CardTitle className="flex items-center gap-2 text-base">
                                       <Calendar className="h-4 w-4" />
                                       Bracket de Eliminación (
-                                      {partidosPorTorneo[torneo.IdTorneo]?.length ||
-                                        0}{" "}
+                                      {partidosPorTorneo[torneo.IdTorneo]
+                                        ?.length || 0}{" "}
                                       partidos)
                                     </CardTitle>
                                   </CardHeader>
                                   <CardContent className="pt-0">
                                     {!partidosPorTorneo[torneo.IdTorneo] ||
-                                    partidosPorTorneo[torneo.IdTorneo].length ===
-                                      0 ? (
+                                    partidosPorTorneo[torneo.IdTorneo]
+                                      .length === 0 ? (
                                       <div className="text-center py-8">
                                         <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                                         <p className="text-gray-500">
@@ -1325,7 +1325,9 @@ export default function TorneosPage() {
                                       </div>
                                     ) : (
                                       <BracketView
-                                        partidos={partidosPorTorneo[torneo.IdTorneo]}
+                                        partidos={
+                                          partidosPorTorneo[torneo.IdTorneo]
+                                        }
                                       />
                                     )}
                                   </CardContent>
@@ -1345,194 +1347,201 @@ export default function TorneosPage() {
                                       )
                                     </CardTitle>
                                   </CardHeader>
-                                <CardContent className="pt-0">
-                                  {!participantesPorTorneo[torneo.IdTorneo] ||
-                                  participantesPorTorneo[torneo.IdTorneo]
-                                    .length === 0 ? (
-                                    <p className="text-gray-500 text-center py-4 text-sm">
-                                      No hay participantes inscritos
-                                    </p>
-                                  ) : (
-                                    <div className="space-y-2">
-                                      {participantesPorTorneo[
-                                        torneo.IdTorneo
-                                      ].map((participante) => (
-                                        <div
-                                          key={participante.id}
-                                          className="border rounded-lg p-3 bg-white flex items-center justify-between"
-                                        >
-                                          <div className="flex items-center gap-2">
-                                            {getParticipanteIcon(participante)}
-                                            <span>{participante.nombre}</span>
-                                            <Badge>{participante.tipo}</Badge>
-                                          </div>
-
-                                          {Number(participante.esEquipo) ===
-                                            1 &&
-                                            participante.equipoId && (
-                                              <Dialog>
-                                                <DialogTrigger asChild>
-                                                  <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() =>
-                                                      toggleEquipo(
-                                                        torneo.IdTorneo,
-                                                        participante.equipoId!
-                                                      )
-                                                    }
-                                                  >
-                                                    <Eye className="h-4 w-4" />
-                                                  </Button>
-                                                </DialogTrigger>
-
-                                                {equiposExpandidos.has(
-                                                  `${torneo.IdTorneo}-${participante.equipoId}`
-                                                ) && (
-                                                  <DialogContent className="w-96">
-                                                    <DialogHeader>
-                                                      <DialogTitle>
-                                                        Integrantes del equipo
-                                                      </DialogTitle>
-                                                      <DialogDescription>
-                                                        Listado de socios que
-                                                        forman parte del equipo{" "}
-                                                        {participante.nombre}
-                                                      </DialogDescription>
-                                                    </DialogHeader>
-
-                                                    <div className="mt-2 space-y-1">
-                                                      {integrantesEquipos[
-                                                        participante.equipoId
-                                                      ]?.length > 0 ? (
-                                                        integrantesEquipos[
-                                                          participante.equipoId
-                                                        ].map((i: any) => (
-                                                          <div
-                                                            key={i.IdSocio}
-                                                            className="flex items-center gap-2"
-                                                          >
-                                                            <User className="h-4 w-4 text-green-600" />
-                                                            <span>
-                                                              {i.Nombre}{" "}
-                                                              {i.Apellido}
-                                                            </span>
-                                                          </div>
-                                                        ))
-                                                      ) : (
-                                                        <span className="text-gray-500 text-sm">
-                                                          No hay integrantes en
-                                                          este equipo
-                                                        </span>
-                                                      )}
-                                                    </div>
-                                                  </DialogContent>
-                                                )}
-                                              </Dialog>
-                                            )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </CardContent>
-                              </Card>
-
-                              {/* Partidos - Columna derecha más grande */}
-                              <Card className="lg:col-span-2">
-                                <CardHeader className="pb-3">
-                                  <CardTitle className="flex items-center gap-2 text-base">
-                                    <Calendar className="h-4 w-4" />
-                                    Partidos (
-                                    {partidosPorTorneo[torneo.IdTorneo]
-                                      ?.length || 0}
-                                    )
-                                    {torneo.TipoTorneo === 1 && (
-                                      <Badge variant="outline" className="ml-2">
-                                        Bracket
-                                      </Badge>
-                                    )}
-                                  </CardTitle>
-                                </CardHeader>
-                                <CardContent className="pt-0">
-                                  {!partidosPorTorneo[torneo.IdTorneo] ||
-                                  partidosPorTorneo[torneo.IdTorneo].length ===
-                                    0 ? (
-                                    <div className="text-center py-8">
-                                      <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                                      <p className="text-gray-500 mb-4">
-                                        No se han generado partidos todavía
+                                  <CardContent className="pt-0">
+                                    {!participantesPorTorneo[torneo.IdTorneo] ||
+                                    participantesPorTorneo[torneo.IdTorneo]
+                                      .length === 0 ? (
+                                      <p className="text-gray-500 text-center py-4 text-sm">
+                                        No hay participantes inscritos
                                       </p>
-                                    </div>
-                                  ) : (
-                                    <div className="space-y-3">
-                                      {partidosPorTorneo[torneo.IdTorneo].map(
-                                        (partido) => (
+                                    ) : (
+                                      <div className="space-y-2">
+                                        {participantesPorTorneo[
+                                          torneo.IdTorneo
+                                        ].map((participante) => (
                                           <div
-                                            key={partido.IdPartido}
-                                            className="border rounded-lg p-3"
+                                            key={participante.id}
+                                            className="border rounded-lg p-3 bg-white flex items-center justify-between"
                                           >
-                                            <div className="flex items-center justify-between mb-2">
-                                              <div className="flex items-center gap-2">
-                                                <Badge variant="outline">
-                                                  {partido.FixtureNombre}
-                                                </Badge>
-                                                <span className="text-sm text-gray-600">
-                                                  {partido.Lugar}
-                                                </span>
-                                              </div>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                  handleVerPartido(
-                                                    partido.IdPartido
-                                                  )
-                                                }
-                                              >
-                                                <Eye className="h-4 w-4" />
-                                              </Button>
+                                            <div className="flex items-center gap-2">
+                                              {getParticipanteIcon(
+                                                participante
+                                              )}
+                                              <span>{participante.nombre}</span>
+                                              <Badge>{participante.tipo}</Badge>
                                             </div>
-                                            <div className="text-center">
-                                              <div className="font-medium">
-                                                {partido.ParticipanteA} vs{" "}
-                                                {partido.ParticipanteB}
+
+                                            {Number(participante.esEquipo) ===
+                                              1 &&
+                                              participante.equipoId && (
+                                                <Dialog>
+                                                  <DialogTrigger asChild>
+                                                    <Button
+                                                      size="sm"
+                                                      variant="outline"
+                                                      onClick={() =>
+                                                        toggleEquipo(
+                                                          torneo.IdTorneo,
+                                                          participante.equipoId!
+                                                        )
+                                                      }
+                                                    >
+                                                      <Eye className="h-4 w-4" />
+                                                    </Button>
+                                                  </DialogTrigger>
+
+                                                  {equiposExpandidos.has(
+                                                    `${torneo.IdTorneo}-${participante.equipoId}`
+                                                  ) && (
+                                                    <DialogContent className="w-96">
+                                                      <DialogHeader>
+                                                        <DialogTitle>
+                                                          Integrantes del equipo
+                                                        </DialogTitle>
+                                                        <DialogDescription>
+                                                          Listado de socios que
+                                                          forman parte del
+                                                          equipo{" "}
+                                                          {participante.nombre}
+                                                        </DialogDescription>
+                                                      </DialogHeader>
+
+                                                      <div className="mt-2 space-y-1">
+                                                        {integrantesEquipos[
+                                                          participante.equipoId
+                                                        ]?.length > 0 ? (
+                                                          integrantesEquipos[
+                                                            participante
+                                                              .equipoId
+                                                          ].map((i: any) => (
+                                                            <div
+                                                              key={i.IdSocio}
+                                                              className="flex items-center gap-2"
+                                                            >
+                                                              <User className="h-4 w-4 text-green-600" />
+                                                              <span>
+                                                                {i.Nombre}{" "}
+                                                                {i.Apellido}
+                                                              </span>
+                                                            </div>
+                                                          ))
+                                                        ) : (
+                                                          <span className="text-gray-500 text-sm">
+                                                            No hay integrantes
+                                                            en este equipo
+                                                          </span>
+                                                        )}
+                                                      </div>
+                                                    </DialogContent>
+                                                  )}
+                                                </Dialog>
+                                              )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </CardContent>
+                                </Card>
+
+                                {/* Partidos - Columna derecha más grande */}
+                                <Card className="lg:col-span-2">
+                                  <CardHeader className="pb-3">
+                                    <CardTitle className="flex items-center gap-2 text-base">
+                                      <Calendar className="h-4 w-4" />
+                                      Partidos (
+                                      {partidosPorTorneo[torneo.IdTorneo]
+                                        ?.length || 0}
+                                      )
+                                      {torneo.TipoTorneo === 1 && (
+                                        <Badge
+                                          variant="outline"
+                                          className="ml-2"
+                                        >
+                                          Bracket
+                                        </Badge>
+                                      )}
+                                    </CardTitle>
+                                  </CardHeader>
+                                  <CardContent className="pt-0">
+                                    {!partidosPorTorneo[torneo.IdTorneo] ||
+                                    partidosPorTorneo[torneo.IdTorneo]
+                                      .length === 0 ? (
+                                      <div className="text-center py-8">
+                                        <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                                        <p className="text-gray-500 mb-4">
+                                          No se han generado partidos todavía
+                                        </p>
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-3">
+                                        {partidosPorTorneo[torneo.IdTorneo].map(
+                                          (partido) => (
+                                            <div
+                                              key={partido.IdPartido}
+                                              className="border rounded-lg p-3"
+                                            >
+                                              <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                  <Badge variant="outline">
+                                                    {partido.FixtureNombre}
+                                                  </Badge>
+                                                  <span className="text-sm text-gray-600">
+                                                    {partido.Lugar}
+                                                  </span>
+                                                </div>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() =>
+                                                    handleVerPartido(
+                                                      partido.IdPartido
+                                                    )
+                                                  }
+                                                >
+                                                  <Eye className="h-4 w-4" />
+                                                </Button>
                                               </div>
-                                              <div className="text-sm text-gray-600 flex items-center justify-center gap-2 mt-1">
-                                                <Clock className="h-3 w-3" />
-                                                {partido.FechaHora ? (
-                                                  <>
-                                                    {format(
-                                                      new Date(
-                                                        partido.FechaHora
-                                                      ),
-                                                      "dd/MM/yyyy"
-                                                    )}{" "}
-                                                    -{" "}
-                                                    {format(
-                                                      new Date(
-                                                        partido.FechaHora
-                                                      ),
-                                                      "HH:mm"
-                                                    )}
-                                                  </>
-                                                ) : (
-                                                  "Próximamente"
+                                              <div className="text-center">
+                                                <div className="font-medium">
+                                                  {partido.ParticipanteA} vs{" "}
+                                                  {partido.ParticipanteB}
+                                                </div>
+                                                <div className="text-sm text-gray-600 flex items-center justify-center gap-2 mt-1">
+                                                  <Clock className="h-3 w-3" />
+                                                  {partido.FechaHora ? (
+                                                    <>
+                                                      {format(
+                                                        new Date(
+                                                          partido.FechaHora
+                                                        ),
+                                                        "dd/MM/yyyy"
+                                                      )}{" "}
+                                                      -{" "}
+                                                      {format(
+                                                        new Date(
+                                                          partido.FechaHora
+                                                        ),
+                                                        "HH:mm"
+                                                      )}
+                                                    </>
+                                                  ) : (
+                                                    "Próximamente"
+                                                  )}
+                                                </div>
+                                                {partido.ArbitroNombre && (
+                                                  <div className="text-xs text-gray-500 mt-1">
+                                                    Árbitro:{" "}
+                                                    {partido.ArbitroNombre}
+                                                  </div>
                                                 )}
                                               </div>
-                                              {partido.ArbitroNombre && (
-                                                <div className="text-xs text-gray-500 mt-1">
-                                                  Árbitro:{" "}
-                                                  {partido.ArbitroNombre}
-                                                </div>
-                                              )}
                                             </div>
-                                          </div>
-                                        )
-                                      )}
-                                    </div>
-                                  )}
-                                </CardContent>
-                              </Card>
+                                          )
+                                        )}
+                                      </div>
+                                    )}
+                                  </CardContent>
+                                </Card>
                               </div>
                             )}
                           </div>

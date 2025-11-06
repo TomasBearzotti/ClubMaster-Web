@@ -70,7 +70,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: "Torneo creado exitosamente. El tipo de fixture se definirá al generar el fixture.",
+      message:
+        "Torneo creado exitosamente. El tipo de fixture se definirá al generar el fixture.",
     });
   } catch (error) {
     console.error("Error creating torneo:", error);

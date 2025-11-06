@@ -471,7 +471,9 @@ export default function CargarResultadosPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">{partido.FixtureNombre}</Badge>
+                          <Badge variant="outline">
+                            {partido.FixtureNombre}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           {getEstadoPartidoBadge(partido.Estado)}

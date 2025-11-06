@@ -29,7 +29,7 @@ export function BracketView({ partidos }: BracketViewProps) {
   // Agrupar partidos por ronda
   const partidosPorRonda = React.useMemo(() => {
     const agrupados: { [ronda: number]: Partido[] } = {};
-    
+
     partidos.forEach((partido) => {
       const ronda = partido.NumeroRonda || 1;
       if (!agrupados[ronda]) {
@@ -51,7 +51,7 @@ export function BracketView({ partidos }: BracketViewProps) {
 
   const getNombreRonda = (ronda: number, totalRondas: number) => {
     const partidosEnRonda = partidosPorRonda[ronda].length;
-    
+
     // Determinar el nombre de la ronda basado en la cantidad de partidos
     if (ronda === totalRondas) {
       return "Final";
@@ -105,7 +105,7 @@ export function BracketView({ partidos }: BracketViewProps) {
     const primeraRonda = rondas[0];
     const partidosPrimeraRonda = partidosPorRonda[primeraRonda];
     const mitad = Math.ceil(partidosPrimeraRonda.length / 2);
-    
+
     return {
       mitadSuperior: partidosPrimeraRonda.slice(0, mitad),
       mitadInferior: partidosPrimeraRonda.slice(mitad),
@@ -123,14 +123,19 @@ export function BracketView({ partidos }: BracketViewProps) {
           <div className="flex gap-8 min-w-max px-4">
             {rondas.map((ronda, indexRonda) => {
               const partidosRonda = partidosPorRonda[ronda];
-              const partidosMostrar = indexRonda === 0 
-                ? mitadSuperior 
-                : indexRonda === rondas.length - 1
+              const partidosMostrar =
+                indexRonda === 0
+                  ? mitadSuperior
+                  : indexRonda === rondas.length - 1
                   ? [partidosRonda[0]] // Solo la final
                   : partidosRonda.slice(0, Math.ceil(partidosRonda.length / 2));
 
               return (
-                <div key={`superior-${ronda}`} className="flex flex-col" style={{ minWidth: "280px" }}>
+                <div
+                  key={`superior-${ronda}`}
+                  className="flex flex-col"
+                  style={{ minWidth: "280px" }}
+                >
                   {/* Encabezado de la ronda */}
                   <div className="mb-4 text-center sticky top-0 bg-gradient-to-br from-blue-50 to-gray-100 py-2 z-10">
                     <h3 className="font-bold text-lg text-blue-900 flex items-center justify-center gap-2">
@@ -140,7 +145,9 @@ export function BracketView({ partidos }: BracketViewProps) {
                       {getNombreRonda(ronda, rondas.length)}
                     </h3>
                     <p className="text-sm text-gray-600">
-                      {indexRonda === rondas.length - 1 ? "1 partido" : `${partidosMostrar.length} partidos`}
+                      {indexRonda === rondas.length - 1
+                        ? "1 partido"
+                        : `${partidosMostrar.length} partidos`}
                     </p>
                   </div>
 
@@ -171,12 +178,17 @@ export function BracketView({ partidos }: BracketViewProps) {
           <div className="flex gap-8 min-w-max px-4">
             {rondas.slice(0, -1).map((ronda, indexRonda) => {
               const partidosRonda = partidosPorRonda[ronda];
-              const partidosMostrar = indexRonda === 0 
-                ? mitadInferior 
-                : partidosRonda.slice(Math.ceil(partidosRonda.length / 2));
+              const partidosMostrar =
+                indexRonda === 0
+                  ? mitadInferior
+                  : partidosRonda.slice(Math.ceil(partidosRonda.length / 2));
 
               return (
-                <div key={`inferior-${ronda}`} className="flex flex-col" style={{ minWidth: "280px" }}>
+                <div
+                  key={`inferior-${ronda}`}
+                  className="flex flex-col"
+                  style={{ minWidth: "280px" }}
+                >
                   {/* Encabezado de la ronda */}
                   <div className="mb-4 text-center sticky top-0 bg-gradient-to-br from-blue-50 to-gray-100 py-2 z-10">
                     <h3 className="font-bold text-lg text-blue-900">
@@ -239,20 +251,27 @@ interface PartidoCardProps {
   index: number;
 }
 
-function PartidoCard({ partido, onVerPartido, getEstadoBadge, indexRonda, index }: PartidoCardProps) {
+function PartidoCard({
+  partido,
+  onVerPartido,
+  getEstadoBadge,
+  indexRonda,
+  index,
+}: PartidoCardProps) {
   const hasTBD = !partido.ParticipanteA || !partido.ParticipanteB;
-  
+
   return (
     <Card
       className={`border-2 transition-all hover:shadow-md relative ${
-        hasTBD 
-          ? "border-dashed border-gray-300 bg-gray-50/50" 
+        hasTBD
+          ? "border-dashed border-gray-300 bg-gray-50/50"
           : "hover:border-blue-300 border-gray-200"
       }`}
       style={{
-        marginTop: indexRonda > 0 && index > 0 
-          ? `${Math.pow(2, indexRonda) * 16}px` 
-          : "0",
+        marginTop:
+          indexRonda > 0 && index > 0
+            ? `${Math.pow(2, indexRonda) * 16}px`
+            : "0",
       }}
     >
       <CardContent className="p-3">
@@ -290,29 +309,37 @@ function PartidoCard({ partido, onVerPartido, getEstadoBadge, indexRonda, index 
 
         {/* Participantes */}
         <div className="space-y-2">
-          <div className={`flex items-center justify-between p-2 rounded border ${
-            !partido.ParticipanteA 
-              ? "bg-gray-100 border-gray-300 border-dashed" 
-              : "bg-white border-gray-200"
-          }`}>
-            <span className={`text-sm truncate pr-2 ${
-              !partido.ParticipanteA 
-                ? "text-gray-400 italic font-normal" 
-                : "font-medium text-gray-900"
-            }`}>
+          <div
+            className={`flex items-center justify-between p-2 rounded border ${
+              !partido.ParticipanteA
+                ? "bg-gray-100 border-gray-300 border-dashed"
+                : "bg-white border-gray-200"
+            }`}
+          >
+            <span
+              className={`text-sm truncate pr-2 ${
+                !partido.ParticipanteA
+                  ? "text-gray-400 italic font-normal"
+                  : "font-medium text-gray-900"
+              }`}
+            >
               {partido.ParticipanteA || "TBD"}
             </span>
           </div>
-          <div className={`flex items-center justify-between p-2 rounded border ${
-            !partido.ParticipanteB 
-              ? "bg-gray-100 border-gray-300 border-dashed" 
-              : "bg-white border-gray-200"
-          }`}>
-            <span className={`text-sm truncate pr-2 ${
-              !partido.ParticipanteB 
-                ? "text-gray-400 italic font-normal" 
-                : "font-medium text-gray-900"
-            }`}>
+          <div
+            className={`flex items-center justify-between p-2 rounded border ${
+              !partido.ParticipanteB
+                ? "bg-gray-100 border-gray-300 border-dashed"
+                : "bg-white border-gray-200"
+            }`}
+          >
+            <span
+              className={`text-sm truncate pr-2 ${
+                !partido.ParticipanteB
+                  ? "text-gray-400 italic font-normal"
+                  : "font-medium text-gray-900"
+              }`}
+            >
               {partido.ParticipanteB || "TBD"}
             </span>
           </div>
