@@ -78,6 +78,7 @@ export function PWARegister() {
           cacheNames.forEach((cacheName) => {
             if (
               cacheName.includes("clubmaster-v2") ||
+              cacheName.includes("clubmaster-v3.1") ||
               cacheName.includes("offline")
             ) {
               console.log("🗑️ Limpiando cache antigua:", cacheName);
