@@ -792,7 +792,7 @@ export default function GestionTorneosPage() {
             className="bg-yellow-600 hover:bg-yellow-700 h-12 flex items-center gap-2"
           >
             <Calendar className="h-5 w-5" />
-            Generar Fixture
+            Administracion de Fixture
           </Button>
 
           <Button
