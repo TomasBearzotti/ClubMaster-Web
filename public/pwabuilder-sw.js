@@ -1,7 +1,7 @@
 // ClubMaster PWA Builder Service Worker - DEPRECADO
-// Este archivo ya NO se usa - usar /sw.js v3.2
+// Este archivo ya NO se usa - usar /sw.js v4.0
 
-console.log('⚠️ pwabuilder-sw.js DEPRECADO - usar /sw.js v3.2');
+console.log('⚠️ pwabuilder-sw.js DEPRECADO - usar /sw.js v4.0');
 
 self.addEventListener("install", (event) => {
   console.log("🔄 pwabuilder-sw instalando (deprecado)");

@@ -1,49 +1,27 @@
-// ClubMaster Service Worker - Optimizado para desarrollo ágil
-// Estrategia: Network First para TODO - Cache solo como último recurso offline
+// ClubMaster Service Worker - SIN CACHE de contenido dinámico
+// Estrategia: SIEMPRE red para páginas y APIs - Solo assets estáticos en cache
 
-const VERSION = "clubmaster-v3.2";
+const VERSION = "clubmaster-v4.0";
 const STATIC_CACHE = `${VERSION}-static`;
-const RUNTIME_CACHE = `${VERSION}-runtime`;
-const OFFLINE_CACHE = `${VERSION}-offline`;
 
-// Assets estáticos que NO cambian
+// Solo assets estáticos (íconos, manifest)
 const STATIC_ASSETS = [
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
   '/manifest.json',
 ];
 
-// Página principal para acceso offline (login)
-const OFFLINE_PAGE = '/';
-
 // ===== INSTALL =====
 self.addEventListener("install", (event) => {
   console.log(`✅ SW ${VERSION} instalando...`);
   
   event.waitUntil(
-    Promise.all([
-      // Cache de assets estáticos
-      caches.open(STATIC_CACHE)
-        .then((cache) => cache.addAll(STATIC_ASSETS)),
-      
-      // Cache de página principal (login) para offline
-      caches.open(OFFLINE_CACHE)
-        .then((cache) => {
-          return fetch(OFFLINE_PAGE)
-            .then((response) => {
-              if (response.ok) {
-                return cache.put(OFFLINE_PAGE, response);
-              }
-            })
-            .catch(() => {
-              console.log('⚠️ No se pudo cachear página principal (normal en primera instalación)');
-            });
-        })
-    ])
-    .then(() => {
-      console.log('✅ Caches inicializadas');
-      return self.skipWaiting(); // Activa inmediatamente
-    })
+    caches.open(STATIC_CACHE)
+      .then((cache) => cache.addAll(STATIC_ASSETS))
+      .then(() => {
+        console.log('✅ Assets estáticos cacheados');
+        return self.skipWaiting();
+      })
   );
 });
 
@@ -52,16 +30,10 @@ self.addEventListener("activate", (event) => {
   console.log(`✅ SW ${VERSION} activando...`);
   
   event.waitUntil(
-    // Limpiar caches antiguos
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((cacheName) => {
-            return cacheName.startsWith('clubmaster-') && 
-                   cacheName !== STATIC_CACHE && 
-                   cacheName !== RUNTIME_CACHE &&
-                   cacheName !== OFFLINE_CACHE;
-          })
+          .filter((cacheName) => cacheName.startsWith('clubmaster-') && cacheName !== STATIC_CACHE)
           .map((cacheName) => {
             console.log(`🗑️ Eliminando cache antigua: ${cacheName}`);
             return caches.delete(cacheName);
@@ -69,7 +41,7 @@ self.addEventListener("activate", (event) => {
       );
     }).then(() => {
       console.log('✅ Caches antiguas eliminadas');
-      return self.clients.claim(); // Toma control inmediato
+      return self.clients.claim();
     })
   );
 });
@@ -95,95 +67,77 @@ self.addEventListener('fetch', (event) => {
 async function handleFetch(request) {
   const url = new URL(request.url);
 
-  // 1. HEALTH API - SIEMPRE INTENTA RED, NO CACHE (para verificar conexión BD)
-  if (url.pathname === '/api/health') {
-    try {
-      const networkResponse = await fetch(request);
-      return networkResponse;
-    } catch (error) {
-      console.log('❌ Health check falló (sin conexión)');
-      return new Response(
-        JSON.stringify({ 
-          error: 'Sin conexión a internet',
-          offline: true,
-          status: 'offline'
-        }),
-        {
-          status: 503,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-  }
-
-  // 2. PÁGINA PRINCIPAL (/) - DISPONIBLE OFFLINE desde cache
-  if (request.mode === 'navigate' && url.pathname === '/') {
-    try {
-      // Intentar red primero
-      const networkResponse = await fetch(request);
-      
-      if (networkResponse && networkResponse.status === 200) {
-        // Actualizar cache con versión fresca
-        const cache = await caches.open(OFFLINE_CACHE);
-        cache.put(request, networkResponse.clone());
-        return networkResponse;
-      }
-    } catch (error) {
-      // Si falla red, usar cache
-      console.log('📱 Sirviendo página principal desde cache (offline)');
-      const cachedResponse = await caches.match(OFFLINE_PAGE);
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-    }
-  }
-
-  // 3. OTRAS PÁGINAS Y APIS - SIEMPRE RED PRIMERO, NO CACHE
+  // 1. TODAS LAS PÁGINAS Y APIS - SIEMPRE RED, NUNCA CACHE
   if (
     request.mode === 'navigate' ||
     url.pathname.startsWith('/api/') ||
     url.pathname.endsWith('.json')
   ) {
     try {
-      // Siempre intentar red primero
-      const networkResponse = await fetch(request);
-      
-      // No cachear respuestas de error
-      if (!networkResponse || networkResponse.status !== 200) {
-        return networkResponse;
-      }
-
-      return networkResponse;
+      // Siempre red, sin cachear
+      return await fetch(request);
     } catch (error) {
-      // Solo si estamos offline, mostrar mensaje
       console.log('❌ Sin conexión para:', url.pathname);
+      
+      // Si es navegación, mostrar mensaje offline
+      if (request.mode === 'navigate') {
+        return new Response(
+          `<!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <title>ClubMaster - Offline</title>
+              <style>
+                body {
+                  font-family: system-ui, -apple-system, sans-serif;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  min-height: 100vh;
+                  margin: 0;
+                  background: #000;
+                  color: #fff;
+                }
+                .container { text-align: center; padding: 2rem; }
+                h1 { margin: 0 0 1rem; }
+                p { margin: 0.5rem 0; color: #999; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <h1>🔌 Sin conexión</h1>
+                <p>No se puede cargar ClubMaster sin internet</p>
+                <p>Verifica tu conexión e intenta nuevamente</p>
+              </div>
+            </body>
+          </html>`,
+          {
+            status: 503,
+            headers: { 'Content-Type': 'text/html; charset=utf-8' }
+          }
+        );
+      }
+      
+      // Para APIs, retornar error JSON
       return new Response(
-        JSON.stringify({ 
-          error: 'Sin conexión a internet',
-          offline: true 
-        }),
-        {
-          status: 503,
-          headers: { 'Content-Type': 'application/json' }
-        }
+        JSON.stringify({ error: 'Sin conexión', offline: true }),
+        { status: 503, headers: { 'Content-Type': 'application/json' } }
       );
     }
   }
 
-  // 4. ASSETS ESTÁTICOS (_next/static, imágenes, etc) - Cache primero
+  // 2. ASSETS ESTÁTICOS - Cache primero (solo iconos y manifest)
   if (
-    url.pathname.startsWith('/_next/static/') ||
     url.pathname.startsWith('/icons/') ||
     url.pathname === '/manifest.json'
   ) {
     const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
+    if (cachedResponse) return cachedResponse;
 
     try {
       const networkResponse = await fetch(request);
-      if (networkResponse && networkResponse.status === 200) {
+      if (networkResponse?.status === 200) {
         const cache = await caches.open(STATIC_CACHE);
         cache.put(request, networkResponse.clone());
       }
@@ -193,18 +147,8 @@ async function handleFetch(request) {
     }
   }
 
-  // 5. TODO LO DEMÁS - Red directa sin cache
-  try {
-    return await fetch(request);
-  } catch (error) {
-    // Fallback solo para assets críticos
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    
-    throw error;
-  }
+  // 3. TODO LO DEMÁS - SIEMPRE RED, SIN CACHE
+  return await fetch(request);
 }
 
 // ===== MENSAJES =====
