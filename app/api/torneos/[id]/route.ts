@@ -24,15 +24,20 @@ export async function GET(
           t.MaxParticipantes,
           t.FechaFin,
           t.PremioGanador,
-          t.TipoTorneo,
-        COUNT(p.IdParticipante) as Participantes
+          COALESCE(f.Tipo, t.TipoTorneo, 0) AS TipoTorneo,
+          COUNT(p.IdParticipante) as Participantes
         FROM Torneos t
         INNER JOIN Deportes d ON t.IdDeporte = d.IdDeporte
         LEFT JOIN Participantes p ON t.IdTorneo = p.TorneoId
+        LEFT JOIN (
+          SELECT TorneoId, MIN(Tipo) as Tipo
+          FROM Fixtures
+          GROUP BY TorneoId
+        ) f ON t.IdTorneo = f.TorneoId
         WHERE t.IdTorneo = @torneoId
         GROUP BY t.IdTorneo, t.Nombre, t.IdDeporte, d.Nombre, 
          t.FechaInicio, t.Estado, t.Descripcion, t.MaxParticipantes, 
-         t.FechaFin, t.PremioGanador, t.TipoTorneo
+         t.FechaFin, t.PremioGanador, f.Tipo, t.TipoTorneo
       `);
 
     if (torneoResult.recordset.length === 0) {

@@ -101,6 +101,7 @@ export default function CargarResultadosPage() {
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [faseSeleccionada, setFaseSeleccionada] = useState<string>("");
 
   useEffect(() => {
     fetchTorneos();
@@ -150,7 +151,26 @@ export default function CargarResultadosPage() {
       );
       if (response.ok) {
         const data = await response.json();
-        setPartidos(data);
+        // Ordenar por FechaHora
+        const partidosOrdenados = data.sort((a: Partido, b: Partido) => {
+          if (!a.FechaHora) return 1;
+          if (!b.FechaHora) return -1;
+          return a.FechaHora.localeCompare(b.FechaHora);
+        });
+        setPartidos(partidosOrdenados);
+
+        // Auto-seleccionar la primera fase con partidos pendientes
+        if (partidosOrdenados.length > 0) {
+          const fases = Array.from(
+            new Set(partidosOrdenados.map((p: Partido) => p.FixtureNombre))
+          ).sort() as string[];
+          const faseConPendientes = fases.find((fase) =>
+            partidosOrdenados.some(
+              (p: Partido) => p.FixtureNombre === fase && p.Estado !== 2
+            )
+          );
+          setFaseSeleccionada(faseConPendientes || fases[0] || "");
+        }
       } else {
         toast({
           title: "Error",
@@ -319,6 +339,15 @@ export default function CargarResultadosPage() {
     }
   };
 
+  const obtenerFasesUnicas = () => {
+    const fases = Array.from(new Set(partidos.map((p) => p.FixtureNombre)));
+    return fases.sort();
+  };
+
+  const partidosFiltrados = faseSeleccionada
+    ? partidos.filter((p) => p.FixtureNombre === faseSeleccionada)
+    : partidos;
+
   const handleVolver = () => {
     router.push("/torneos");
   };
@@ -412,7 +441,9 @@ export default function CargarResultadosPage() {
               <CardDescription>
                 {partidos.length === 0
                   ? "No hay partidos registrados"
-                  : `${partidos.length} partido(s) encontrado(s)`}
+                  : `${partidosFiltrados.length} partido(s) ${
+                      faseSeleccionada ? `en ${faseSeleccionada}` : "total"
+                    }`}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -434,78 +465,112 @@ export default function CargarResultadosPage() {
                   </p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Participantes</TableHead>
-                      <TableHead>Fecha/Hora</TableHead>
-                      <TableHead>Fase</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Estadísticas</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {partidos.map((partido) => (
-                      <TableRow key={partido.IdPartido}>
-                        <TableCell>
-                          <div className="font-medium">
-                            {partido.ParticipanteA} vs {partido.ParticipanteB}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {partido.FechaHora ? (
-                            <div>
-                              <div>
-                                {format(
-                                  new Date(partido.FechaHora),
-                                  "dd/MM/yyyy"
-                                )}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                {format(new Date(partido.FechaHora), "HH:mm")}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-gray-400">Próximamente</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {partido.FixtureNombre}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {getEstadoPartidoBadge(partido.Estado)}
-                        </TableCell>
-                        <TableCell>
-                          {partido.TieneEstadisticas ? (
-                            <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-                              Cargadas
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">
-                              Pendientes
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleOpenUploadDialog(partido)}
-                            className="flex items-center gap-1"
-                          >
-                            <Upload className="h-4 w-4" />
-                            {partido.TieneEstadisticas
-                              ? "Actualizar"
-                              : "Cargar"}
-                          </Button>
-                        </TableCell>
+                <>
+                  {obtenerFasesUnicas().length > 1 && (
+                    <div className="mb-4 flex items-center gap-2">
+                      <Label htmlFor="fase-selector">Filtrar por Fase:</Label>
+                      <Select
+                        value={faseSeleccionada}
+                        onValueChange={setFaseSeleccionada}
+                      >
+                        <SelectTrigger id="fase-selector" className="w-64">
+                          <SelectValue placeholder="Todas las fases" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {obtenerFasesUnicas().map((fase) => (
+                            <SelectItem key={fase} value={fase}>
+                              {fase}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {faseSeleccionada && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setFaseSeleccionada("")}
+                        >
+                          Ver Todas
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Participantes</TableHead>
+                        <TableHead>Fecha/Hora</TableHead>
+                        <TableHead>Fase</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Estadísticas</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {partidosFiltrados.map((partido) => (
+                        <TableRow key={partido.IdPartido}>
+                          <TableCell>
+                            <div className="font-medium">
+                              {partido.ParticipanteA} vs {partido.ParticipanteB}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {partido.FechaHora ? (
+                              <div>
+                                <div>
+                                  {format(
+                                    new Date(partido.FechaHora),
+                                    "dd/MM/yyyy"
+                                  )}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  {format(new Date(partido.FechaHora), "HH:mm")}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">
+                                Próximamente
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {partido.FixtureNombre}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {getEstadoPartidoBadge(partido.Estado)}
+                          </TableCell>
+                          <TableCell>
+                            {partido.TieneEstadisticas ? (
+                              <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                                Cargadas
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">
+                                Pendientes
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenUploadDialog(partido)}
+                              className="flex items-center gap-1"
+                            >
+                              <Upload className="h-4 w-4" />
+                              {partido.TieneEstadisticas
+                                ? "Actualizar"
+                                : "Cargar"}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </>
               )}
             </CardContent>
           </Card>

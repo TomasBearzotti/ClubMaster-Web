@@ -13,12 +13,17 @@ export async function GET(request: NextRequest) {
       d.Nombre AS NombreDeporte,
       t.FechaInicio,
       t.Estado,
-      t.TipoTorneo,
+      COALESCE(f.Tipo, t.TipoTorneo, 0) AS TipoTorneo,
       COUNT(p.IdParticipante) as Participantes
     FROM Torneos t
     INNER JOIN Deportes d ON t.IdDeporte = d.IdDeporte
     LEFT JOIN Participantes p ON t.IdTorneo = p.TorneoId
-    GROUP BY t.IdTorneo, t.Nombre, t.IdDeporte, d.Nombre, t.FechaInicio, t.Estado, t.TipoTorneo
+    LEFT JOIN (
+      SELECT TorneoId, MIN(Tipo) as Tipo
+      FROM Fixtures
+      GROUP BY TorneoId
+    ) f ON t.IdTorneo = f.TorneoId
+    GROUP BY t.IdTorneo, t.Nombre, t.IdDeporte, d.Nombre, t.FechaInicio, t.Estado, f.Tipo, t.TipoTorneo
     ORDER BY t.FechaInicio DESC
     `);
 

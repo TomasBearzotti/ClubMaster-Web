@@ -49,6 +49,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
   ArrowLeft,
   Trophy,
   Plus,
@@ -165,6 +174,16 @@ export default function GestionTorneosPage() {
     new Set()
   );
 
+  // Estado para tabs de torneos tipo Liga (0)
+  const [tabsLiga, setTabsLiga] = useState<
+    Record<number, "posiciones" | "partidos">
+  >({});
+
+  // Estado para fecha seleccionada en cada torneo
+  const [fechaSeleccionada, setFechaSeleccionada] = useState<
+    Record<number, number>
+  >({});
+
   const [filtros, setFiltros] = useState({
     busqueda: "",
     estado: "all",
@@ -249,7 +268,35 @@ export default function GestionTorneosPage() {
       );
       if (partidosResponse.ok) {
         const partidosData = await partidosResponse.json();
-        setPartidosPorTorneo((prev) => ({ ...prev, [torneoId]: partidosData }));
+        // Ordenar partidos por fecha (menor a mayor)
+        const partidosOrdenados = partidosData.sort(
+          (a: Partido, b: Partido) => {
+            if (!a.FechaHora) return 1;
+            if (!b.FechaHora) return -1;
+            return (
+              new Date(a.FechaHora).getTime() - new Date(b.FechaHora).getTime()
+            );
+          }
+        );
+        setPartidosPorTorneo((prev) => ({
+          ...prev,
+          [torneoId]: partidosOrdenados,
+        }));
+
+        // Establecer la fecha por defecto (primera fecha no completada o la menor)
+        const fechas = obtenerFechasUnicas(partidosOrdenados);
+        if (fechas.length > 0) {
+          const primeraFechaNoCompletada = fechas.find((fecha) => {
+            const partidosFecha = partidosOrdenados.filter(
+              (p: Partido) => p.FixtureNombre === `Fecha ${fecha}`
+            );
+            return partidosFecha.some((p: Partido) => p.Estado === 0); // Pendiente
+          });
+          setFechaSeleccionada((prev) => ({
+            ...prev,
+            [torneoId]: primeraFechaNoCompletada || fechas[0],
+          }));
+        }
       }
     } catch (error) {
       console.error("Error fetching torneo detalle:", error);
@@ -274,8 +321,69 @@ export default function GestionTorneosPage() {
       if (!torneosDetalle[torneoId]) {
         fetchTorneoDetalle(torneoId);
       }
+      // Establecer tab por defecto según tipo de torneo
+      if (!tabsLiga[torneoId]) {
+        setTabsLiga((prev) => ({ ...prev, [torneoId]: "posiciones" }));
+      }
     }
     setTorneosExpandidos(newExpandidos);
+  };
+
+  // Obtener fechas únicas de los partidos
+  const obtenerFechasUnicas = (partidos: Partido[]): number[] => {
+    const fechas = new Set<number>();
+    partidos.forEach((partido) => {
+      const match = partido.FixtureNombre.match(/Fecha (\d+)/);
+      if (match) {
+        fechas.add(parseInt(match[1]));
+      }
+    });
+    return Array.from(fechas).sort((a, b) => a - b);
+  };
+
+  // Calcular tabla de posiciones
+  const calcularTablaPosiciones = (torneoId: number) => {
+    const partidos = partidosPorTorneo[torneoId] || [];
+    const participantes = participantesPorTorneo[torneoId] || [];
+
+    const tabla = participantes.map((participante) => {
+      let pj = 0,
+        pg = 0,
+        pe = 0,
+        pp = 0;
+
+      partidos.forEach((partido) => {
+        // Solo contar partidos finalizados
+        if (partido.Estado !== 2) return;
+
+        const esParticipanteA = partido.ParticipanteA === participante.nombre;
+        const esParticipanteB = partido.ParticipanteB === participante.nombre;
+
+        if (!esParticipanteA && !esParticipanteB) return;
+
+        pj++;
+
+        // Aquí deberías tener el resultado del partido
+        // Por ahora asumimos que el ganador está marcado de alguna forma
+        // TODO: Necesitarás agregar ResultadoA y ResultadoB en la interfaz Partido
+      });
+
+      return {
+        participante: participante.nombre,
+        pj,
+        pg,
+        pe,
+        pp,
+        puntos: pg * 3 + pe * 1, // Puntuación estándar
+      };
+    });
+
+    // Ordenar por puntos, luego por PG
+    return tabla.sort((a, b) => {
+      if (b.puntos !== a.puntos) return b.puntos - a.puntos;
+      if (b.pg !== a.pg) return b.pg - a.pg;
+      return b.pj - a.pj;
+    });
   };
 
   const toggleEquipo = async (torneoId: number, equipoId: number) => {
@@ -792,7 +900,7 @@ export default function GestionTorneosPage() {
             className="bg-yellow-600 hover:bg-yellow-700 h-12 flex items-center gap-2"
           >
             <Calendar className="h-5 w-5" />
-            Administracion de Fixture
+            Administrar Fixtures
           </Button>
 
           <Button
@@ -1049,14 +1157,83 @@ export default function GestionTorneosPage() {
                                     {participantesPorTorneo[
                                       torneo.IdTorneo
                                     ].map((participante) => (
-                                      <Badge
-                                        key={participante.id}
-                                        variant="outline"
-                                        className="flex items-center gap-1 px-3 py-1"
-                                      >
-                                        {getParticipanteIcon(participante)}
-                                        <span>{participante.nombre}</span>
-                                      </Badge>
+                                      <div key={participante.id}>
+                                        {Number(participante.esEquipo) === 1 &&
+                                        participante.equipoId ? (
+                                          <Dialog>
+                                            <DialogTrigger asChild>
+                                              <Badge
+                                                variant="outline"
+                                                className="flex items-center gap-1 px-3 py-1 cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                                                onClick={() =>
+                                                  toggleEquipo(
+                                                    torneo.IdTorneo,
+                                                    participante.equipoId!
+                                                  )
+                                                }
+                                              >
+                                                {getParticipanteIcon(
+                                                  participante
+                                                )}
+                                                <span className="text-blue-600 hover:text-blue-700">
+                                                  {participante.nombre}
+                                                </span>
+                                              </Badge>
+                                            </DialogTrigger>
+
+                                            {equiposExpandidos.has(
+                                              `${torneo.IdTorneo}-${participante.equipoId}`
+                                            ) && (
+                                              <DialogContent className="w-96">
+                                                <DialogHeader>
+                                                  <DialogTitle>
+                                                    Integrantes del equipo
+                                                  </DialogTitle>
+                                                  <DialogDescription>
+                                                    Listado de socios que forman
+                                                    parte del equipo{" "}
+                                                    {participante.nombre}
+                                                  </DialogDescription>
+                                                </DialogHeader>
+
+                                                <div className="mt-2 space-y-1">
+                                                  {integrantesEquipos[
+                                                    participante.equipoId
+                                                  ]?.length > 0 ? (
+                                                    integrantesEquipos[
+                                                      participante.equipoId
+                                                    ].map((i: any) => (
+                                                      <div
+                                                        key={i.IdSocio}
+                                                        className="flex items-center gap-2"
+                                                      >
+                                                        <User className="h-4 w-4 text-green-600" />
+                                                        <span>
+                                                          {i.Nombre}{" "}
+                                                          {i.Apellido}
+                                                        </span>
+                                                      </div>
+                                                    ))
+                                                  ) : (
+                                                    <span className="text-gray-500 text-sm">
+                                                      No hay integrantes en este
+                                                      equipo
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </DialogContent>
+                                            )}
+                                          </Dialog>
+                                        ) : (
+                                          <Badge
+                                            variant="outline"
+                                            className="flex items-center gap-1 px-3 py-1"
+                                          >
+                                            {getParticipanteIcon(participante)}
+                                            <span>{participante.nombre}</span>
+                                          </Badge>
+                                        )}
+                                      </div>
                                     ))}
                                   </div>
                                 )}
@@ -1100,6 +1277,397 @@ export default function GestionTorneosPage() {
                                 )}
                               </CardContent>
                             </Card>
+                          </div>
+                        ) : torneo.TipoTorneo === 0 ? (
+                          // Torneo tipo LIGA - Tabs con Posiciones y Partidos por Fecha
+                          <div className="space-y-4">
+                            {/* Participantes en una fila horizontal compacta */}
+                            <Card>
+                              <CardHeader className="pb-3">
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                  <Users className="h-4 w-4" />
+                                  Participantes (
+                                  {participantesPorTorneo[torneo.IdTorneo]
+                                    ?.length || 0}
+                                  )
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent className="pt-0">
+                                {!participantesPorTorneo[torneo.IdTorneo] ||
+                                participantesPorTorneo[torneo.IdTorneo]
+                                  .length === 0 ? (
+                                  <p className="text-gray-500 text-center py-4 text-sm">
+                                    No hay participantes inscritos
+                                  </p>
+                                ) : (
+                                  <div className="flex flex-wrap gap-2">
+                                    {participantesPorTorneo[
+                                      torneo.IdTorneo
+                                    ].map((participante) => (
+                                      <div key={participante.id}>
+                                        {Number(participante.esEquipo) === 1 &&
+                                        participante.equipoId ? (
+                                          <Dialog>
+                                            <DialogTrigger asChild>
+                                              <Badge
+                                                variant="outline"
+                                                className="flex items-center gap-1 px-3 py-1 cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                                                onClick={() =>
+                                                  toggleEquipo(
+                                                    torneo.IdTorneo,
+                                                    participante.equipoId!
+                                                  )
+                                                }
+                                              >
+                                                {getParticipanteIcon(
+                                                  participante
+                                                )}
+                                                <span className="text-blue-600 hover:text-blue-700">
+                                                  {participante.nombre}
+                                                </span>
+                                              </Badge>
+                                            </DialogTrigger>
+
+                                            {equiposExpandidos.has(
+                                              `${torneo.IdTorneo}-${participante.equipoId}`
+                                            ) && (
+                                              <DialogContent className="w-96">
+                                                <DialogHeader>
+                                                  <DialogTitle>
+                                                    Integrantes del equipo
+                                                  </DialogTitle>
+                                                  <DialogDescription>
+                                                    Listado de socios que forman
+                                                    parte del equipo{" "}
+                                                    {participante.nombre}
+                                                  </DialogDescription>
+                                                </DialogHeader>
+
+                                                <div className="mt-2 space-y-1">
+                                                  {integrantesEquipos[
+                                                    participante.equipoId
+                                                  ]?.length > 0 ? (
+                                                    integrantesEquipos[
+                                                      participante.equipoId
+                                                    ].map((i: any) => (
+                                                      <div
+                                                        key={i.IdSocio}
+                                                        className="flex items-center gap-2"
+                                                      >
+                                                        <User className="h-4 w-4 text-green-600" />
+                                                        <span>
+                                                          {i.Nombre}{" "}
+                                                          {i.Apellido}
+                                                        </span>
+                                                      </div>
+                                                    ))
+                                                  ) : (
+                                                    <span className="text-gray-500 text-sm">
+                                                      No hay integrantes en este
+                                                      equipo
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </DialogContent>
+                                            )}
+                                          </Dialog>
+                                        ) : (
+                                          <Badge
+                                            variant="outline"
+                                            className="flex items-center gap-1 px-3 py-1"
+                                          >
+                                            {getParticipanteIcon(participante)}
+                                            <span>{participante.nombre}</span>
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </CardContent>
+                            </Card>
+
+                            <Tabs
+                              value={tabsLiga[torneo.IdTorneo] || "posiciones"}
+                              onValueChange={(value) =>
+                                setTabsLiga((prev) => ({
+                                  ...prev,
+                                  [torneo.IdTorneo]: value as
+                                    | "posiciones"
+                                    | "partidos",
+                                }))
+                              }
+                              className="w-full"
+                            >
+                              <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="posiciones">
+                                  <Trophy className="h-4 w-4 mr-2" />
+                                  Tabla de Posiciones
+                                </TabsTrigger>
+                                <TabsTrigger value="partidos">
+                                  <Calendar className="h-4 w-4 mr-2" />
+                                  Partidos por Fecha
+                                </TabsTrigger>
+                              </TabsList>
+
+                              {/* Tab de Tabla de Posiciones */}
+                              <TabsContent
+                                value="posiciones"
+                                className="space-y-4"
+                              >
+                                <Card>
+                                  <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                      <Trophy className="h-5 w-5 text-yellow-600" />
+                                      Tabla de Posiciones
+                                    </CardTitle>
+                                    <CardDescription>
+                                      Clasificación actual del torneo
+                                    </CardDescription>
+                                  </CardHeader>
+                                  <CardContent>
+                                    {!partidosPorTorneo[torneo.IdTorneo] ||
+                                    partidosPorTorneo[torneo.IdTorneo]
+                                      .length === 0 ? (
+                                      <div className="text-center py-8">
+                                        <Trophy className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                                        <p className="text-gray-500 mb-4">
+                                          No se han generado partidos todavía
+                                        </p>
+                                        <Button
+                                          onClick={handleGenerarFixture}
+                                          className="bg-yellow-600 hover:bg-yellow-700"
+                                        >
+                                          <Calendar className="h-4 w-4 mr-2" />
+                                          Generar Fixture
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <Table>
+                                        <TableHeader>
+                                          <TableRow>
+                                            <TableHead className="w-12">
+                                              #
+                                            </TableHead>
+                                            <TableHead>Participante</TableHead>
+                                            <TableHead className="text-center">
+                                              PJ
+                                            </TableHead>
+                                            <TableHead className="text-center">
+                                              PG
+                                            </TableHead>
+                                            <TableHead className="text-center">
+                                              PE
+                                            </TableHead>
+                                            <TableHead className="text-center">
+                                              PP
+                                            </TableHead>
+                                          </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                          {calcularTablaPosiciones(
+                                            torneo.IdTorneo
+                                          ).map((fila, index) => (
+                                            <TableRow key={fila.participante}>
+                                              <TableCell className="font-medium">
+                                                {index + 1}
+                                              </TableCell>
+                                              <TableCell className="font-semibold">
+                                                {fila.participante}
+                                              </TableCell>
+                                              <TableCell className="text-center">
+                                                {fila.pj}
+                                              </TableCell>
+                                              <TableCell className="text-center text-green-600 font-semibold">
+                                                {fila.pg}
+                                              </TableCell>
+                                              <TableCell className="text-center text-gray-600">
+                                                {fila.pe}
+                                              </TableCell>
+                                              <TableCell className="text-center text-red-600 font-semibold">
+                                                {fila.pp}
+                                              </TableCell>
+                                            </TableRow>
+                                          ))}
+                                        </TableBody>
+                                      </Table>
+                                    )}
+                                  </CardContent>
+                                </Card>
+                              </TabsContent>
+
+                              {/* Tab de Partidos por Fecha */}
+                              <TabsContent
+                                value="partidos"
+                                className="space-y-4"
+                              >
+                                <Card>
+                                  <CardHeader>
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <CardTitle className="flex items-center gap-2">
+                                          <Calendar className="h-5 w-5 text-blue-600" />
+                                          Partidos
+                                        </CardTitle>
+                                        <CardDescription>
+                                          Resultados y próximos encuentros
+                                        </CardDescription>
+                                      </div>
+                                      {partidosPorTorneo[torneo.IdTorneo] &&
+                                        partidosPorTorneo[torneo.IdTorneo]
+                                          .length > 0 && (
+                                          <Select
+                                            value={
+                                              fechaSeleccionada[
+                                                torneo.IdTorneo
+                                              ]?.toString() || "1"
+                                            }
+                                            onValueChange={(value) =>
+                                              setFechaSeleccionada((prev) => ({
+                                                ...prev,
+                                                [torneo.IdTorneo]:
+                                                  parseInt(value),
+                                              }))
+                                            }
+                                          >
+                                            <SelectTrigger className="w-[180px]">
+                                              <SelectValue placeholder="Seleccionar fecha" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {obtenerFechasUnicas(
+                                                partidosPorTorneo[
+                                                  torneo.IdTorneo
+                                                ]
+                                              ).map((fecha) => (
+                                                <SelectItem
+                                                  key={fecha}
+                                                  value={fecha.toString()}
+                                                >
+                                                  Fecha {fecha}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        )}
+                                    </div>
+                                  </CardHeader>
+                                  <CardContent>
+                                    {!partidosPorTorneo[torneo.IdTorneo] ||
+                                    partidosPorTorneo[torneo.IdTorneo]
+                                      .length === 0 ? (
+                                      <div className="text-center py-8">
+                                        <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                                        <p className="text-gray-500 mb-4">
+                                          No se han generado partidos todavía
+                                        </p>
+                                        <Button
+                                          onClick={handleGenerarFixture}
+                                          className="bg-yellow-600 hover:bg-yellow-700"
+                                        >
+                                          <Calendar className="h-4 w-4 mr-2" />
+                                          Generar Fixture
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-3">
+                                        {partidosPorTorneo[torneo.IdTorneo]
+                                          .filter((partido) => {
+                                            const match =
+                                              partido.FixtureNombre.match(
+                                                /Fecha (\d+)/
+                                              );
+                                            return (
+                                              match &&
+                                              parseInt(match[1]) ===
+                                                (fechaSeleccionada[
+                                                  torneo.IdTorneo
+                                                ] || 1)
+                                            );
+                                          })
+                                          .map((partido) => (
+                                            <div
+                                              key={partido.IdPartido}
+                                              className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                                            >
+                                              <div className="flex items-center gap-4 flex-1">
+                                                <div className="text-center min-w-[120px]">
+                                                  {partido.FechaHora ? (
+                                                    <>
+                                                      <div className="text-sm font-medium">
+                                                        {format(
+                                                          new Date(
+                                                            partido.FechaHora
+                                                          ),
+                                                          "dd/MM/yyyy"
+                                                        )}
+                                                      </div>
+                                                      <div className="text-xs text-gray-500">
+                                                        {format(
+                                                          new Date(
+                                                            partido.FechaHora
+                                                          ),
+                                                          "HH:mm"
+                                                        )}
+                                                      </div>
+                                                    </>
+                                                  ) : (
+                                                    <span className="text-sm text-gray-400">
+                                                      Sin fecha
+                                                    </span>
+                                                  )}
+                                                </div>
+
+                                                <div className="flex-1 grid grid-cols-3 items-center gap-2">
+                                                  <div className="text-right font-medium">
+                                                    {partido.ParticipanteA ||
+                                                      "TBD"}
+                                                  </div>
+                                                  <div className="text-center text-sm text-gray-500 font-semibold">
+                                                    VS
+                                                  </div>
+                                                  <div className="text-left font-medium">
+                                                    {partido.ParticipanteB ||
+                                                      "TBD"}
+                                                  </div>
+                                                </div>
+
+                                                <Badge
+                                                  variant={
+                                                    partido.Estado === 0
+                                                      ? "secondary"
+                                                      : partido.Estado === 1
+                                                      ? "default"
+                                                      : "outline"
+                                                  }
+                                                  className="min-w-[100px] justify-center"
+                                                >
+                                                  {partido.Estado === 0
+                                                    ? "Pendiente"
+                                                    : partido.Estado === 1
+                                                    ? "En Curso"
+                                                    : "Finalizado"}
+                                                </Badge>
+                                              </div>
+
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleVerPartido(
+                                                    partido.IdPartido
+                                                  )
+                                                }
+                                              >
+                                                <Eye className="h-4 w-4" />
+                                              </Button>
+                                            </div>
+                                          ))}
+                                      </div>
+                                    )}
+                                  </CardContent>
+                                </Card>
+                              </TabsContent>
+                            </Tabs>
                           </div>
                         ) : (
                           // Layout normal en grid para torneos que NO son de eliminación

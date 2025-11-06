@@ -126,6 +126,7 @@ export default function GenerarFixturePage() {
   const [partidos, setPartidos] = useState<Partido[]>([]);
   const [activeTab, setActiveTab] = useState("calendario");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [faseSeleccionada, setFaseSeleccionada] = useState<string>("");
 
   // Estados para edición de partidos
   const [editingPartido, setEditingPartido] = useState<Partido | null>(null);
@@ -399,6 +400,22 @@ export default function GenerarFixturePage() {
 
     return { partidosAgrupados, partidosSinFecha };
   };
+
+  const obtenerFasesUnicas = () => {
+    const fases = Array.from(new Set(partidos.map((p) => p.FixtureNombre)));
+    return fases.sort();
+  };
+
+  // Auto-seleccionar la primera fase con partidos pendientes
+  useEffect(() => {
+    if (partidos.length > 0 && !faseSeleccionada) {
+      const fases = obtenerFasesUnicas();
+      const faseConPendientes = fases.find((fase) =>
+        partidos.some((p) => p.FixtureNombre === fase && p.Estado !== 2)
+      );
+      setFaseSeleccionada(faseConPendientes || fases[0] || "");
+    }
+  }, [partidos, faseSeleccionada]);
 
   const { partidosAgrupados, partidosSinFecha } = agruparPartidosPorFecha();
 
@@ -965,89 +982,123 @@ export default function GenerarFixturePage() {
                   </TabsContent>
 
                   <TabsContent value="fases" className="mt-4">
-                    {Array.from(
-                      new Set(partidos.map((p) => p.FixtureNombre))
-                    ).map((fixtureName) => (
-                      <div key={fixtureName} className="mb-6">
-                        <h3 className="text-lg font-semibold mb-3 flex items-center gap-2 text-blue-800">
-                          <Trophy className="h-5 w-5" />
-                          {fixtureName}
-                        </h3>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Fecha</TableHead>
-                              <TableHead>Hora</TableHead>
-                              <TableHead>Participante A</TableHead>
-                              <TableHead>Participante B</TableHead>
-                              <TableHead>Lugar</TableHead>
-                              {partidos.some((p) => p.Grupo) && (
-                                <TableHead>Grupo</TableHead>
-                              )}
-                              <TableHead>Acciones</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {partidos
-                              .filter((p) => p.FixtureNombre === fixtureName)
-                              .sort((a, b) =>
-                                (a.FechaHora || "").localeCompare(
-                                  b.FechaHora || ""
-                                )
-                              )
-                              .map((partido) => (
-                                <TableRow key={partido.IdPartido}>
-                                  <TableCell>
-                                    {partido.FechaHora
-                                      ? format(
-                                          new Date(partido.FechaHora),
-                                          "dd/MM/yyyy"
-                                        )
-                                      : "Sin fecha"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {partido.FechaHora
-                                      ? format(
-                                          new Date(partido.FechaHora),
-                                          "HH:mm"
-                                        )
-                                      : "Sin hora"}
-                                  </TableCell>
-                                  <TableCell className="font-medium">
-                                    {partido.ParticipanteA}
-                                  </TableCell>
-                                  <TableCell className="font-medium">
-                                    {partido.ParticipanteB}
-                                  </TableCell>
-                                  <TableCell>{partido.Lugar}</TableCell>
-                                  {partidos.some((p) => p.Grupo) && (
-                                    <TableCell>
-                                      {partido.Grupo && (
-                                        <Badge variant="secondary">
-                                          Grupo {partido.Grupo}
-                                        </Badge>
-                                      )}
-                                    </TableCell>
-                                  )}
-                                  <TableCell>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleEditarPartido(partido)
-                                      }
-                                      className="text-xs"
-                                    >
-                                      <Edit className="h-3 w-3 mr-1" />
-                                      Editar
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
+                    {obtenerFasesUnicas().length > 0 ? (
+                      <>
+                        <div className="mb-4 flex items-center gap-2">
+                          <Label htmlFor="fase-selector">
+                            Seleccionar Fase:
+                          </Label>
+                          <Select
+                            value={faseSeleccionada}
+                            onValueChange={setFaseSeleccionada}
+                          >
+                            <SelectTrigger id="fase-selector" className="w-64">
+                              <SelectValue placeholder="Selecciona una fase" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {obtenerFasesUnicas().map((fase) => (
+                                <SelectItem key={fase} value={fase}>
+                                  {fase}
+                                </SelectItem>
                               ))}
-                          </TableBody>
-                        </Table>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {faseSeleccionada && (
+                          <div>
+                            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2 text-blue-800">
+                              <Trophy className="h-5 w-5" />
+                              {faseSeleccionada}
+                            </h3>
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Fecha</TableHead>
+                                  <TableHead>Hora</TableHead>
+                                  <TableHead>Participante A</TableHead>
+                                  <TableHead>Participante B</TableHead>
+                                  <TableHead>Lugar</TableHead>
+                                  {partidos.some((p) => p.Grupo) && (
+                                    <TableHead>Grupo</TableHead>
+                                  )}
+                                  <TableHead>Estado</TableHead>
+                                  <TableHead>Acciones</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {partidos
+                                  .filter(
+                                    (p) => p.FixtureNombre === faseSeleccionada
+                                  )
+                                  .sort((a, b) =>
+                                    (a.FechaHora || "").localeCompare(
+                                      b.FechaHora || ""
+                                    )
+                                  )
+                                  .map((partido) => (
+                                    <TableRow key={partido.IdPartido}>
+                                      <TableCell>
+                                        {partido.FechaHora
+                                          ? format(
+                                              new Date(partido.FechaHora),
+                                              "dd/MM/yyyy"
+                                            )
+                                          : "Sin fecha"}
+                                      </TableCell>
+                                      <TableCell>
+                                        {partido.FechaHora
+                                          ? format(
+                                              new Date(partido.FechaHora),
+                                              "HH:mm"
+                                            )
+                                          : "Sin hora"}
+                                      </TableCell>
+                                      <TableCell className="font-medium">
+                                        {partido.ParticipanteA}
+                                      </TableCell>
+                                      <TableCell className="font-medium">
+                                        {partido.ParticipanteB}
+                                      </TableCell>
+                                      <TableCell>{partido.Lugar}</TableCell>
+                                      {partidos.some((p) => p.Grupo) && (
+                                        <TableCell>
+                                          {partido.Grupo && (
+                                            <Badge variant="secondary">
+                                              Grupo {partido.Grupo}
+                                            </Badge>
+                                          )}
+                                        </TableCell>
+                                      )}
+                                      <TableCell>
+                                        {getEstadoPartidoBadge(partido.Estado)}
+                                      </TableCell>
+                                      <TableCell>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            handleEditarPartido(partido)
+                                          }
+                                          className="text-xs"
+                                        >
+                                          <Edit className="h-3 w-3 mr-1" />
+                                          Editar
+                                        </Button>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <Trophy className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                        <p>No hay fases disponibles</p>
                       </div>
-                    ))}
+                    )}
                   </TabsContent>
                 </Tabs>
               </CardContent>
