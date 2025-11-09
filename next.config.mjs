@@ -15,7 +15,7 @@ const nextConfig = {
   allowedDevOrigins: [
     "local-origin.dev",
     "*.local-origin.dev",
-    "clubmaster.giize.com",
+    "clubmaster.zotti.site",
   ],
 };
 
