@@ -19,10 +19,17 @@ export function DatabaseStatus() {
   useEffect(() => {
     const checkHealth = async () => {
       try {
-        const response = await fetch("/api/health")
+        const response = await fetch("/api/health", {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache",
+          },
+        })
         const data = await response.json()
+        console.log("Database health check:", data)
         setStatus(data)
       } catch (error) {
+        console.error("Health check failed:", error)
         setStatus({
           status: "unhealthy",
           database: "disconnected",
@@ -57,7 +64,10 @@ export function DatabaseStatus() {
   const isHealthy = status.status === "healthy"
 
   return (
-    <Alert className={isHealthy ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
+    <Alert 
+      key={status.timestamp}
+      className={isHealthy ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           {isHealthy ? (
@@ -70,7 +80,9 @@ export function DatabaseStatus() {
             {status.error && ` - ${status.error}`}
           </AlertDescription>
         </div>
-        <Badge variant={isHealthy ? "default" : "destructive"}>{isHealthy ? "Operativo" : "Error"}</Badge>
+        <Badge variant={isHealthy ? "default" : "destructive"}>
+          {isHealthy ? "Operativo" : "Error"}
+        </Badge>
       </div>
     </Alert>
   )

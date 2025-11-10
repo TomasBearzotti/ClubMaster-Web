@@ -5,12 +5,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/lib/auth-context";
 import { PWARegister } from "@/components/PWARegister";
-import dynamic from "next/dynamic";
-
-const ClientDarkLayout = dynamic(
-  () => import("@/components/ClientDarkLayout").then((m) => m.ClientDarkLayout),
-  { ssr: false }
-);
+import { ClientDarkLayout } from "@/components/ClientDarkLayout";
 
 const inter = Inter({ subsets: ["latin"] });
 
