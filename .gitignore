@@ -26,8 +26,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-/lib/
-
 # scripts de inicio locales
 start.ps1
 start.bat
