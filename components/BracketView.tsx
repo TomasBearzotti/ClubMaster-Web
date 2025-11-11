@@ -10,6 +10,8 @@ import { useRouter } from "next/navigation";
 
 interface Partido {
   IdPartido: number;
+  ParticipanteAId?: number;
+  ParticipanteBId?: number;
   ParticipanteA: string | null;
   ParticipanteB: string | null;
   FechaHora?: string;
@@ -17,6 +19,10 @@ interface Partido {
   NumeroRonda?: number;
   Estado: number;
   Lugar?: string;
+  // Campos de resultado
+  GanadorId?: number;
+  EsEmpate?: boolean;
+  TieneResultado?: boolean;
 }
 
 interface BracketViewProps {
@@ -259,6 +265,48 @@ function PartidoCard({
   index,
 }: PartidoCardProps) {
   const hasTBD = !partido.ParticipanteA || !partido.ParticipanteB;
+  const [revealed, setRevealed] = React.useState(false);
+  const [resultados, setResultados] = React.useState<{
+    scoreA: number | null;
+    scoreB: number | null;
+  }>({ scoreA: null, scoreB: null });
+
+  // Fetch de estadísticas cuando hay resultado
+  React.useEffect(() => {
+    if (partido.TieneResultado && partido.IdPartido) {
+      fetch(`/api/estadisticas/${partido.IdPartido}`)
+        .then((res) => res.json())
+        .then((estadisticas) => {
+          if (estadisticas.length > 0) {
+            // El primer campo corresponde al resultado (Goles, Sets, Puntos, etc.)
+            const primerCampo = estadisticas[0]?.NombreCampo;
+
+            // Buscar el valor para cada participante
+            const scoreA = estadisticas.find(
+              (s: any) =>
+                s.ParticipanteId === partido.ParticipanteAId &&
+                s.NombreCampo === primerCampo
+            );
+            const scoreB = estadisticas.find(
+              (s: any) =>
+                s.ParticipanteId === partido.ParticipanteBId &&
+                s.NombreCampo === primerCampo
+            );
+
+            setResultados({
+              scoreA: scoreA ? Number(scoreA.Valor) : null,
+              scoreB: scoreB ? Number(scoreB.Valor) : null,
+            });
+          }
+        })
+        .catch((err) => console.error("Error fetching stats:", err));
+    }
+  }, [
+    partido.IdPartido,
+    partido.TieneResultado,
+    partido.ParticipanteAId,
+    partido.ParticipanteBId,
+  ]);
 
   return (
     <Card
@@ -309,46 +357,139 @@ function PartidoCard({
 
         {/* Participantes */}
         <div className="space-y-2">
+          {/* Participante A */}
           <div
-            className={`flex items-center justify-between p-2 rounded border ${
+            className={`flex items-center justify-between p-2 rounded border transition-all ${
               !partido.ParticipanteA
                 ? "bg-gray-100 border-gray-300 border-dashed"
+                : revealed && partido.TieneResultado && !partido.EsEmpate
+                ? partido.GanadorId === partido.ParticipanteAId
+                  ? "bg-green-50 border-green-300"
+                  : "bg-gray-50 border-gray-300"
                 : "bg-white border-gray-200"
             }`}
           >
-            <span
-              className={`text-sm truncate pr-2 ${
-                !partido.ParticipanteA
-                  ? "text-gray-400 italic font-normal"
-                  : "font-medium text-gray-900"
-              }`}
-            >
-              {partido.ParticipanteA || "TBD"}
-            </span>
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              {/* Trofeo para ganador - SOLO cuando revealed */}
+              {revealed &&
+                partido.TieneResultado &&
+                !partido.EsEmpate &&
+                partido.GanadorId === partido.ParticipanteAId && (
+                  <Trophy className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+                )}
+
+              <span
+                className={`text-sm truncate ${
+                  !partido.ParticipanteA
+                    ? "text-gray-400 italic font-normal"
+                    : revealed && partido.TieneResultado && !partido.EsEmpate
+                    ? partido.GanadorId === partido.ParticipanteAId
+                      ? "font-bold text-green-600"
+                      : "text-gray-400"
+                    : "font-medium text-gray-900"
+                }`}
+              >
+                {partido.ParticipanteA || "TBD"}
+              </span>
+            </div>
+
+            {/* Resultado oculto/revelado */}
+            {partido.TieneResultado && partido.ParticipanteA && (
+              <button
+                onClick={() => setRevealed(!revealed)}
+                className={`ml-2 px-3 py-1 text-sm font-bold rounded hover:bg-gray-100 transition-colors cursor-pointer select-none min-w-[40px] text-center ${
+                  revealed
+                    ? partido.GanadorId === partido.ParticipanteAId
+                      ? "text-green-600"
+                      : partido.EsEmpate
+                      ? "text-yellow-600"
+                      : "text-gray-400"
+                    : "text-gray-400"
+                }`}
+                title="Click para revelar/ocultar resultado"
+              >
+                {revealed
+                  ? resultados.scoreA !== null
+                    ? resultados.scoreA
+                    : "?"
+                  : "***"}
+              </button>
+            )}
           </div>
+
+          {/* Participante B */}
           <div
-            className={`flex items-center justify-between p-2 rounded border ${
+            className={`flex items-center justify-between p-2 rounded border transition-all ${
               !partido.ParticipanteB
                 ? "bg-gray-100 border-gray-300 border-dashed"
+                : revealed && partido.TieneResultado && !partido.EsEmpate
+                ? partido.GanadorId === partido.ParticipanteBId
+                  ? "bg-green-50 border-green-300"
+                  : "bg-gray-50 border-gray-300"
                 : "bg-white border-gray-200"
             }`}
           >
-            <span
-              className={`text-sm truncate pr-2 ${
-                !partido.ParticipanteB
-                  ? "text-gray-400 italic font-normal"
-                  : "font-medium text-gray-900"
-              }`}
-            >
-              {partido.ParticipanteB || "TBD"}
-            </span>
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              {/* Trofeo para ganador - SOLO cuando revealed */}
+              {revealed &&
+                partido.TieneResultado &&
+                !partido.EsEmpate &&
+                partido.GanadorId === partido.ParticipanteBId && (
+                  <Trophy className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+                )}
+
+              <span
+                className={`text-sm truncate ${
+                  !partido.ParticipanteB
+                    ? "text-gray-400 italic font-normal"
+                    : revealed && partido.TieneResultado && !partido.EsEmpate
+                    ? partido.GanadorId === partido.ParticipanteBId
+                      ? "font-bold text-green-600"
+                      : "text-gray-400"
+                    : "font-medium text-gray-900"
+                }`}
+              >
+                {partido.ParticipanteB || "TBD"}
+              </span>
+            </div>
+
+            {/* Resultado oculto/revelado */}
+            {partido.TieneResultado && partido.ParticipanteB && (
+              <button
+                onClick={() => setRevealed(!revealed)}
+                className={`ml-2 px-3 py-1 text-sm font-bold rounded hover:bg-gray-100 transition-colors cursor-pointer select-none min-w-[40px] text-center ${
+                  revealed
+                    ? partido.GanadorId === partido.ParticipanteBId
+                      ? "text-green-600"
+                      : partido.EsEmpate
+                      ? "text-yellow-600"
+                      : "text-gray-400"
+                    : "text-gray-400"
+                }`}
+                title="Click para revelar/ocultar resultado"
+              >
+                {revealed
+                  ? resultados.scoreB !== null
+                    ? resultados.scoreB
+                    : "?"
+                  : "***"}
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Estado y lugar */}
+        {/* Estado, resultado y lugar */}
         {!hasTBD && (
-          <div className="mt-2 flex items-center justify-between gap-2">
-            {getEstadoBadge(partido.Estado)}
+          <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-1">
+              {getEstadoBadge(partido.Estado)}
+              {/* Badge de empate - SOLO cuando revealed */}
+              {revealed && partido.EsEmpate && (
+                <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 text-xs">
+                  Empate
+                </Badge>
+              )}
+            </div>
             {partido.Lugar && (
               <span className="text-xs text-gray-500 truncate">
                 {partido.Lugar}

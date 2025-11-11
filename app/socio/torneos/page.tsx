@@ -96,6 +96,8 @@ interface Partido {
   IdPartido: number;
   IdTorneo: number;
   FechaHora?: string;
+  ParticipanteAId?: number;
+  ParticipanteBId?: number;
   ParticipanteA: string | null; // Puede ser null para partidos TBD
   ParticipanteB: string | null; // Puede ser null para partidos TBD
   FixtureNombre: string; // Nombre del fixture (antes Fase)
@@ -105,6 +107,10 @@ interface Partido {
   EstadoPartido: string;
   ArbitroId?: number;
   ArbitroNombre?: string;
+  // Campos de resultado
+  GanadorId?: number;
+  EsEmpate?: boolean;
+  TieneResultado?: boolean;
 }
 
 interface InscripcionStatus {
@@ -702,6 +708,183 @@ export default function TorneosPage() {
     } else {
       return "ambos";
     }
+  };
+
+  // Componente para mostrar partidos con reveal de resultados
+  const PartidoFechaCard = ({ partido }: { partido: Partido }) => {
+    const [revealed, setRevealed] = useState(false);
+    const [resultados, setResultados] = useState<{
+      scoreA: number | null;
+      scoreB: number | null;
+    }>({ scoreA: null, scoreB: null });
+
+    // Fetch de estadísticas cuando hay resultado
+    useEffect(() => {
+      if (partido.TieneResultado && partido.IdPartido) {
+        fetch(`/api/estadisticas/${partido.IdPartido}`)
+          .then((res) => res.json())
+          .then((estadisticas) => {
+            if (estadisticas.length > 0) {
+              const primerCampo = estadisticas[0]?.NombreCampo;
+
+              const scoreA = estadisticas.find(
+                (s: any) =>
+                  s.ParticipanteId === partido.ParticipanteAId &&
+                  s.NombreCampo === primerCampo
+              );
+              const scoreB = estadisticas.find(
+                (s: any) =>
+                  s.ParticipanteId === partido.ParticipanteBId &&
+                  s.NombreCampo === primerCampo
+              );
+
+              setResultados({
+                scoreA: scoreA ? Number(scoreA.Valor) : null,
+                scoreB: scoreB ? Number(scoreB.Valor) : null,
+              });
+            }
+          })
+          .catch((err) => console.error("Error fetching stats:", err));
+      }
+    }, [
+      partido.IdPartido,
+      partido.TieneResultado,
+      partido.ParticipanteAId,
+      partido.ParticipanteBId,
+    ]);
+
+    return (
+      <div className="border rounded-lg p-3">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">{partido.FixtureNombre}</Badge>
+            <span className="text-sm text-gray-600">{partido.Lugar}</span>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          {/* Participante A */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 flex-1">
+              {revealed &&
+                partido.TieneResultado &&
+                !partido.EsEmpate &&
+                partido.GanadorId === partido.ParticipanteAId && (
+                  <Trophy className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+                )}
+              <span
+                className={`font-medium transition-colors ${
+                  revealed && partido.TieneResultado && !partido.EsEmpate
+                    ? partido.GanadorId === partido.ParticipanteAId
+                      ? "text-green-600 font-bold"
+                      : "text-gray-400"
+                    : ""
+                }`}
+              >
+                {partido.ParticipanteA}
+              </span>
+            </div>
+
+            {/* Resultado oculto/revelado - Solo si tiene resultado */}
+            {partido.TieneResultado && partido.ParticipanteA && (
+              <button
+                onClick={() => setRevealed(!revealed)}
+                className={`ml-2 px-3 py-1 text-sm font-bold rounded hover:bg-gray-100 transition-colors cursor-pointer select-none min-w-[40px] text-center ${
+                  revealed
+                    ? partido.GanadorId === partido.ParticipanteAId
+                      ? "text-green-600"
+                      : partido.EsEmpate
+                      ? "text-yellow-600"
+                      : "text-gray-400"
+                    : "text-gray-400"
+                }`}
+                title="Click para revelar/ocultar resultado"
+              >
+                {revealed
+                  ? resultados.scoreA !== null
+                    ? resultados.scoreA
+                    : "?"
+                  : "***"}
+              </button>
+            )}
+          </div>
+
+          {/* Participante B */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 flex-1">
+              {revealed &&
+                partido.TieneResultado &&
+                !partido.EsEmpate &&
+                partido.GanadorId === partido.ParticipanteBId && (
+                  <Trophy className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+                )}
+              <span
+                className={`font-medium transition-colors ${
+                  revealed && partido.TieneResultado && !partido.EsEmpate
+                    ? partido.GanadorId === partido.ParticipanteBId
+                      ? "text-green-600 font-bold"
+                      : "text-gray-400"
+                    : ""
+                }`}
+              >
+                {partido.ParticipanteB}
+              </span>
+            </div>
+
+            {/* Resultado oculto/revelado - Solo si tiene resultado */}
+            {partido.TieneResultado && partido.ParticipanteB && (
+              <button
+                onClick={() => setRevealed(!revealed)}
+                className={`ml-2 px-3 py-1 text-sm font-bold rounded hover:bg-gray-100 transition-colors cursor-pointer select-none min-w-[40px] text-center ${
+                  revealed
+                    ? partido.GanadorId === partido.ParticipanteBId
+                      ? "text-green-600"
+                      : partido.EsEmpate
+                      ? "text-yellow-600"
+                      : "text-gray-400"
+                    : "text-gray-400"
+                }`}
+                title="Click para revelar/ocultar resultado"
+              >
+                {revealed
+                  ? resultados.scoreB !== null
+                    ? resultados.scoreB
+                    : "?"
+                  : "***"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Badge de empate y fecha */}
+        <div className="mt-2 flex items-center justify-between">
+          {revealed && partido.EsEmpate && (
+            <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 text-xs">
+              Empate
+            </Badge>
+          )}
+          <div className="text-sm text-gray-600 flex items-center gap-1 ml-auto">
+            <Clock className="h-3 w-3" />
+            {partido.FechaHora
+              ? `${format(
+                  new Date(partido.FechaHora),
+                  "dd/MM/yyyy"
+                )} - ${format(new Date(partido.FechaHora), "HH:mm")}`
+              : "Próximamente"}
+          </div>
+        </div>
+
+        <Button
+          onClick={() => handleVerPartido(partido.IdPartido)}
+          variant="outline"
+          size="sm"
+          className="w-full mt-2"
+        >
+          <Eye className="h-4 w-4 mr-2" />
+          Ver Detalle
+        </Button>
+      </div>
+    );
   };
 
   const InscripcionForm = ({ torneo }: { torneo: Torneo }) => {
@@ -1834,57 +2017,14 @@ export default function TorneosPage() {
                                                     ] || 1)
                                                 );
                                               })
-                                              .map((partido) => (
-                                                <div
-                                                  key={partido.IdPartido}
-                                                  className="border rounded-lg p-3"
-                                                >
-                                                  <div className="flex items-center justify-between mb-2">
-                                                    <div className="flex items-center gap-2">
-                                                      <Badge variant="outline">
-                                                        {partido.FixtureNombre}
-                                                      </Badge>
-                                                      <span className="text-sm text-gray-600">
-                                                        {partido.Lugar}
-                                                      </span>
-                                                    </div>
-                                                  </div>
-                                                  <div className="text-center">
-                                                    <div className="font-medium">
-                                                      {partido.ParticipanteA} vs{" "}
-                                                      {partido.ParticipanteB}
-                                                    </div>
-                                                    <div className="text-sm text-gray-600 flex items-center justify-center gap-2 mt-1">
-                                                      <Clock className="h-3 w-3" />
-                                                      {partido.FechaHora ? (
-                                                        <>
-                                                          {format(
-                                                            new Date(
-                                                              partido.FechaHora
-                                                            ),
-                                                            "dd/MM/yyyy"
-                                                          )}{" "}
-                                                          -{" "}
-                                                          {format(
-                                                            new Date(
-                                                              partido.FechaHora
-                                                            ),
-                                                            "HH:mm"
-                                                          )}
-                                                        </>
-                                                      ) : (
-                                                        "Próximamente"
-                                                      )}
-                                                    </div>
-                                                    {partido.ArbitroNombre && (
-                                                      <div className="text-xs text-gray-500 mt-1">
-                                                        Árbitro:{" "}
-                                                        {partido.ArbitroNombre}
-                                                      </div>
-                                                    )}
-                                                  </div>
-                                                </div>
-                                              ))}
+                                              .map((partido) => {
+                                                return (
+                                                  <PartidoFechaCard
+                                                    key={partido.IdPartido}
+                                                    partido={partido}
+                                                  />
+                                                );
+                                              })}
                                           </div>
                                         )}
                                       </CardContent>
@@ -2035,66 +2175,10 @@ export default function TorneosPage() {
                                       <div className="space-y-3">
                                         {partidosPorTorneo[torneo.IdTorneo].map(
                                           (partido) => (
-                                            <div
+                                            <PartidoFechaCard
                                               key={partido.IdPartido}
-                                              className="border rounded-lg p-3"
-                                            >
-                                              <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center gap-2">
-                                                  <Badge variant="outline">
-                                                    {partido.FixtureNombre}
-                                                  </Badge>
-                                                  <span className="text-sm text-gray-600">
-                                                    {partido.Lugar}
-                                                  </span>
-                                                </div>
-                                                <Button
-                                                  variant="ghost"
-                                                  size="sm"
-                                                  onClick={() =>
-                                                    handleVerPartido(
-                                                      partido.IdPartido
-                                                    )
-                                                  }
-                                                >
-                                                  <Eye className="h-4 w-4" />
-                                                </Button>
-                                              </div>
-                                              <div className="text-center">
-                                                <div className="font-medium">
-                                                  {partido.ParticipanteA} vs{" "}
-                                                  {partido.ParticipanteB}
-                                                </div>
-                                                <div className="text-sm text-gray-600 flex items-center justify-center gap-2 mt-1">
-                                                  <Clock className="h-3 w-3" />
-                                                  {partido.FechaHora ? (
-                                                    <>
-                                                      {format(
-                                                        new Date(
-                                                          partido.FechaHora
-                                                        ),
-                                                        "dd/MM/yyyy"
-                                                      )}{" "}
-                                                      -{" "}
-                                                      {format(
-                                                        new Date(
-                                                          partido.FechaHora
-                                                        ),
-                                                        "HH:mm"
-                                                      )}
-                                                    </>
-                                                  ) : (
-                                                    "Próximamente"
-                                                  )}
-                                                </div>
-                                                {partido.ArbitroNombre && (
-                                                  <div className="text-xs text-gray-500 mt-1">
-                                                    Árbitro:{" "}
-                                                    {partido.ArbitroNombre}
-                                                  </div>
-                                                )}
-                                              </div>
-                                            </div>
+                                              partido={partido}
+                                            />
                                           )
                                         )}
                                       </div>

@@ -92,6 +92,8 @@ interface Validacion {
 interface Partido {
   IdPartido: number;
   FechaHora?: string;
+  ParticipanteAId?: number;
+  ParticipanteBId?: number;
   ParticipanteA: string | null; // Puede ser null para partidos TBD (To Be Determined)
   ParticipanteB: string | null; // Puede ser null para partidos TBD (To Be Determined)
   FixtureNombre: string; // Nombre del fixture (ej: "Fecha 1", "Semifinal", "Grupo A")
@@ -103,6 +105,10 @@ interface Partido {
   TorneoNombre: string;
   FechaInicio: string;
   FechaFin?: string;
+  // Campos de resultado
+  GanadorId?: number;
+  EsEmpate?: boolean;
+  TieneResultado?: boolean;
 }
 
 interface EditarPartidoData {
@@ -835,30 +841,88 @@ export default function GenerarFixturePage() {
                               <TableHead>Fixture</TableHead>
                               <TableHead>Lugar</TableHead>
                               <TableHead>Estado</TableHead>
+                              <TableHead>Resultado</TableHead>
                               <TableHead>Acciones</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {partidosSinFecha.map((partido) => (
                               <TableRow key={partido.IdPartido}>
-                                <TableCell className="font-medium">
-                                  {partido.ParticipanteA || (
-                                    <span className="text-gray-400 italic">
-                                      TBD
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    {partido.TieneResultado &&
+                                      !partido.EsEmpate &&
+                                      partido.GanadorId ===
+                                        partido.ParticipanteAId && (
+                                        <Trophy className="h-4 w-4 text-yellow-500" />
+                                      )}
+                                    <span
+                                      className={`font-medium ${
+                                        partido.TieneResultado &&
+                                        !partido.EsEmpate
+                                          ? partido.GanadorId ===
+                                            partido.ParticipanteAId
+                                            ? "text-green-600 font-bold"
+                                            : "text-gray-400"
+                                          : ""
+                                      }`}
+                                    >
+                                      {partido.ParticipanteA || (
+                                        <span className="text-gray-400 italic font-normal">
+                                          TBD
+                                        </span>
+                                      )}
                                     </span>
-                                  )}
+                                  </div>
                                 </TableCell>
-                                <TableCell className="font-medium">
-                                  {partido.ParticipanteB || (
-                                    <span className="text-gray-400 italic">
-                                      TBD
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    {partido.TieneResultado &&
+                                      !partido.EsEmpate &&
+                                      partido.GanadorId ===
+                                        partido.ParticipanteBId && (
+                                        <Trophy className="h-4 w-4 text-yellow-500" />
+                                      )}
+                                    <span
+                                      className={`font-medium ${
+                                        partido.TieneResultado &&
+                                        !partido.EsEmpate
+                                          ? partido.GanadorId ===
+                                            partido.ParticipanteBId
+                                            ? "text-green-600 font-bold"
+                                            : "text-gray-400"
+                                          : ""
+                                      }`}
+                                    >
+                                      {partido.ParticipanteB || (
+                                        <span className="text-gray-400 italic font-normal">
+                                          TBD
+                                        </span>
+                                      )}
                                     </span>
-                                  )}
+                                  </div>
                                 </TableCell>
                                 <TableCell>{partido.FixtureNombre}</TableCell>
                                 <TableCell>{partido.Lugar}</TableCell>
                                 <TableCell>
                                   {getEstadoPartidoBadge(partido.Estado)}
+                                </TableCell>
+                                <TableCell>
+                                  {partido.TieneResultado ? (
+                                    partido.EsEmpate ? (
+                                      <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
+                                        Empate
+                                      </Badge>
+                                    ) : (
+                                      <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                                        Finalizado
+                                      </Badge>
+                                    )
+                                  ) : (
+                                    <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">
+                                      Sin resultado
+                                    </Badge>
+                                  )}
                                 </TableCell>
                                 <TableCell>
                                   <Button
@@ -909,6 +973,7 @@ export default function GenerarFixturePage() {
                                   <TableHead>Fixture</TableHead>
                                   <TableHead>Lugar</TableHead>
                                   <TableHead>Estado</TableHead>
+                                  <TableHead>Resultado</TableHead>
                                   <TableHead>Acciones</TableHead>
                                 </TableRow>
                               </TableHeader>
@@ -929,19 +994,59 @@ export default function GenerarFixturePage() {
                                             )
                                           : "Sin hora"}
                                       </TableCell>
-                                      <TableCell className="font-medium">
-                                        {partido.ParticipanteA || (
-                                          <span className="text-gray-400 italic">
-                                            TBD
+                                      <TableCell>
+                                        <div className="flex items-center gap-2">
+                                          {partido.TieneResultado &&
+                                            !partido.EsEmpate &&
+                                            partido.GanadorId ===
+                                              partido.ParticipanteAId && (
+                                              <Trophy className="h-4 w-4 text-yellow-500" />
+                                            )}
+                                          <span
+                                            className={`font-medium ${
+                                              partido.TieneResultado &&
+                                              !partido.EsEmpate
+                                                ? partido.GanadorId ===
+                                                  partido.ParticipanteAId
+                                                  ? "text-green-600 font-bold"
+                                                  : "text-gray-400"
+                                                : ""
+                                            }`}
+                                          >
+                                            {partido.ParticipanteA || (
+                                              <span className="text-gray-400 italic font-normal">
+                                                TBD
+                                              </span>
+                                            )}
                                           </span>
-                                        )}
+                                        </div>
                                       </TableCell>
-                                      <TableCell className="font-medium">
-                                        {partido.ParticipanteB || (
-                                          <span className="text-gray-400 italic">
-                                            TBD
+                                      <TableCell>
+                                        <div className="flex items-center gap-2">
+                                          {partido.TieneResultado &&
+                                            !partido.EsEmpate &&
+                                            partido.GanadorId ===
+                                              partido.ParticipanteBId && (
+                                              <Trophy className="h-4 w-4 text-yellow-500" />
+                                            )}
+                                          <span
+                                            className={`font-medium ${
+                                              partido.TieneResultado &&
+                                              !partido.EsEmpate
+                                                ? partido.GanadorId ===
+                                                  partido.ParticipanteBId
+                                                  ? "text-green-600 font-bold"
+                                                  : "text-gray-400"
+                                                : ""
+                                            }`}
+                                          >
+                                            {partido.ParticipanteB || (
+                                              <span className="text-gray-400 italic font-normal">
+                                                TBD
+                                              </span>
+                                            )}
                                           </span>
-                                        )}
+                                        </div>
                                       </TableCell>
                                       <TableCell>
                                         {partido.FixtureNombre}
@@ -949,6 +1054,23 @@ export default function GenerarFixturePage() {
                                       <TableCell>{partido.Lugar}</TableCell>
                                       <TableCell>
                                         {getEstadoPartidoBadge(partido.Estado)}
+                                      </TableCell>
+                                      <TableCell>
+                                        {partido.TieneResultado ? (
+                                          partido.EsEmpate ? (
+                                            <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
+                                              Empate
+                                            </Badge>
+                                          ) : (
+                                            <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                                              Finalizado
+                                            </Badge>
+                                          )
+                                        ) : (
+                                          <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">
+                                            Sin resultado
+                                          </Badge>
+                                        )}
                                       </TableCell>
                                       <TableCell>
                                         <Button

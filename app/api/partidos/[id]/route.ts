@@ -29,7 +29,9 @@ export async function GET(
           t.FechaInicio,
           t.FechaFin,
           p.ParticipanteAId,
-          p.ParticipanteBId,  
+          p.ParticipanteBId,
+          p.GanadorId,
+          p.EsEmpate,
         CASE 
           WHEN part1.EsEquipo = 1 THEN e1.Nombre
           ELSE CONCAT(per1.Nombre, ' ', per1.Apellido)
@@ -38,6 +40,10 @@ export async function GET(
           WHEN part2.EsEquipo = 1 THEN e2.Nombre
           ELSE CONCAT(per2.Nombre, ' ', per2.Apellido)
         END as ParticipanteB,
+        CASE 
+          WHEN partGanador.EsEquipo = 1 THEN eGanador.Nombre
+          ELSE CONCAT(perGanador.Nombre, ' ', perGanador.Apellido)
+        END as NombreGanador,
         CONCAT(perArb.Nombre, ' ', perArb.Apellido) as ArbitroNombre
         FROM Partidos p
         INNER JOIN Torneos t ON p.TorneoId = t.IdTorneo
@@ -53,6 +59,10 @@ export async function GET(
         LEFT JOIN Personas per2 ON s2.IdPersona = per2.IdPersona
         LEFT JOIN Arbitros arb ON p.ArbitroId = arb.IdArbitro
         LEFT JOIN Personas perArb ON arb.IdPersona = perArb.IdPersona
+        LEFT JOIN Participantes partGanador ON p.GanadorId = partGanador.IdParticipante
+        LEFT JOIN Equipos eGanador ON partGanador.EquipoId = eGanador.IdEquipo
+        LEFT JOIN Socios sGanador ON partGanador.SocioId = sGanador.IdSocio
+        LEFT JOIN Personas perGanador ON sGanador.IdPersona = perGanador.IdPersona
         WHERE p.IdPartido = @partidoId
       `);
 
@@ -90,6 +100,11 @@ export async function GET(
       TorneoNombre: partido.TorneoNombre,
       FechaInicio: partido.FechaInicio?.toISOString(),
       FechaFin: partido.FechaFin?.toISOString(),
+      // Información de resultado
+      GanadorId: partido.GanadorId,
+      EsEmpate: partido.EsEmpate,
+      NombreGanador: partido.NombreGanador,
+      TieneResultado: partido.GanadorId !== null || partido.EsEmpate === true,
     };
 
     return NextResponse.json(partidoFormateado);

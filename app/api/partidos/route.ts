@@ -14,6 +14,8 @@ export async function GET(request: NextRequest) {
     p.IdPartido,
     p.TorneoId,
     t.Nombre as TorneoNombre,
+    p.ParticipanteAId,
+    p.ParticipanteBId,
     pa.Nombre as ParticipanteA,
     pb.Nombre as ParticipanteB,
     p.FechaHora,
@@ -22,7 +24,13 @@ export async function GET(request: NextRequest) {
     p.FixtureIdFixture,
     f.Nombre as FixtureNombre,
     f.NumeroRonda,
-    f.Grupo
+    f.Grupo,
+    p.GanadorId,
+    p.EsEmpate,
+    CASE 
+      WHEN p.GanadorId IS NOT NULL OR p.EsEmpate = 1 THEN 1
+      ELSE 0
+    END as TieneResultado
     ${
       includeStats
         ? `, 

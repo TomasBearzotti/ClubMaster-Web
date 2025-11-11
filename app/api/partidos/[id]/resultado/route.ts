@@ -136,9 +136,56 @@ export async function POST(request: NextRequest) {
         `);
       }
     }
+
+    // ✅ NUEVO: Calcular ganador automáticamente después de cargar estadísticas
+    console.log(`Calculando ganador del partido ${partidoId}...`);
+
+    // 1. Calcular ganador usando la función SQL
+    const resultadoQuery = await pool
+      .request()
+      .input("PartidoId", sql.Int, Number(partidoId)).query(`
+        SELECT GanadorId, EsEmpate, PuntajeA, PuntajeB
+        FROM dbo.fn_CalcularGanadorPartido(@PartidoId)
+      `);
+
+    if (resultadoQuery.recordset.length > 0) {
+      const resultado = resultadoQuery.recordset[0];
+
+      // 2. Actualizar el partido con el resultado
+      await pool
+        .request()
+        .input("PartidoId", sql.Int, Number(partidoId))
+        .input("GanadorId", sql.Int, resultado.GanadorId)
+        .input("EsEmpate", sql.Bit, resultado.EsEmpate).query(`
+          UPDATE Partidos
+          SET GanadorId = @GanadorId,
+              EsEmpate = @EsEmpate
+          WHERE IdPartido = @PartidoId
+        `);
+
+      console.log(
+        `Resultado actualizado: GanadorId=${resultado.GanadorId}, EsEmpate=${resultado.EsEmpate}`
+      );
+
+      // 3. Actualizar tabla de posiciones (si el torneo lo requiere)
+      try {
+        await pool
+          .request()
+          .input("PartidoId", sql.Int, Number(partidoId))
+          .execute("sp_ActualizarTablaPosiciones");
+
+        console.log(
+          `Tabla de posiciones actualizada para partido ${partidoId}`
+        );
+      } catch (spError: any) {
+        // Si el SP falla (ej: torneo sin tabla), solo lo logueamos
+        console.log(`Info: ${spError.message}`);
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      message: "Estadísticas importadas correctamente",
+      message: "Estadísticas importadas y resultado calculado correctamente",
     });
   } catch (error) {
     console.error("Error importando estadísticas:", error);

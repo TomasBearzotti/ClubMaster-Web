@@ -69,6 +69,8 @@ interface Partido {
   IdPartido: number;
   TorneoId: number;
   TorneoNombre: string;
+  ParticipanteAId: number;
+  ParticipanteBId: number;
   ParticipanteA: string;
   ParticipanteB: string;
   FechaHora?: string;
@@ -76,6 +78,10 @@ interface Partido {
   Lugar: string;
   Estado: number;
   TieneEstadisticas: boolean;
+  // Campos de resultado
+  GanadorId?: number;
+  EsEmpate?: boolean;
+  TieneResultado?: boolean;
 }
 
 interface PlantillaEstadistica {
@@ -503,6 +509,7 @@ export default function CargarResultadosPage() {
                         <TableHead>Fecha/Hora</TableHead>
                         <TableHead>Fase</TableHead>
                         <TableHead>Estado</TableHead>
+                        <TableHead>Resultado</TableHead>
                         <TableHead>Estadísticas</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
@@ -511,8 +518,52 @@ export default function CargarResultadosPage() {
                       {partidosFiltrados.map((partido) => (
                         <TableRow key={partido.IdPartido}>
                           <TableCell>
-                            <div className="font-medium">
-                              {partido.ParticipanteA} vs {partido.ParticipanteB}
+                            <div className="flex items-center gap-2 font-medium">
+                              {/* Participante A */}
+                              <span
+                                className={`transition-colors ${
+                                  partido.TieneResultado && !partido.EsEmpate
+                                    ? partido.GanadorId ===
+                                      partido.ParticipanteAId
+                                      ? "text-green-600 font-bold"
+                                      : "text-gray-400"
+                                    : ""
+                                }`}
+                              >
+                                {partido.ParticipanteA}
+                              </span>
+
+                              {/* Icono ganador A */}
+                              {partido.TieneResultado &&
+                                !partido.EsEmpate &&
+                                partido.GanadorId ===
+                                  partido.ParticipanteAId && (
+                                  <Trophy className="h-4 w-4 text-yellow-500" />
+                                )}
+
+                              <span className="text-gray-500">vs</span>
+
+                              {/* Icono ganador B */}
+                              {partido.TieneResultado &&
+                                !partido.EsEmpate &&
+                                partido.GanadorId ===
+                                  partido.ParticipanteBId && (
+                                  <Trophy className="h-4 w-4 text-yellow-500" />
+                                )}
+
+                              {/* Participante B */}
+                              <span
+                                className={`transition-colors ${
+                                  partido.TieneResultado && !partido.EsEmpate
+                                    ? partido.GanadorId ===
+                                      partido.ParticipanteBId
+                                      ? "text-green-600 font-bold"
+                                      : "text-gray-400"
+                                    : ""
+                                }`}
+                              >
+                                {partido.ParticipanteB}
+                              </span>
                             </div>
                           </TableCell>
                           <TableCell>
@@ -543,8 +594,25 @@ export default function CargarResultadosPage() {
                             {getEstadoPartidoBadge(partido.Estado)}
                           </TableCell>
                           <TableCell>
+                            {partido.TieneResultado ? (
+                              partido.EsEmpate ? (
+                                <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
+                                  Empate
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                                  Finalizado
+                                </Badge>
+                              )
+                            ) : (
+                              <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">
+                                Sin resultado
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
                             {partido.TieneEstadisticas ? (
-                              <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                              <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
                                 Cargadas
                               </Badge>
                             ) : (

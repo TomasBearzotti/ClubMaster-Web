@@ -74,6 +74,11 @@ interface PartidoDetalle {
   ResultadoEquipoA?: number;
   ResultadoEquipoB?: number;
   Observaciones?: string;
+  // Campos de resultado
+  GanadorId?: number;
+  EsEmpate?: boolean;
+  NombreGanador?: string;
+  TieneResultado?: boolean;
 }
 
 interface EstadisticaPartido {
@@ -434,13 +439,61 @@ export default function PartidoDetallePage() {
                   <CardDescription>{partido.TorneoNombre}</CardDescription>
                 </div>
                 <CardTitle className="text-2xl">
-                  {partido.ParticipanteA} vs {partido.ParticipanteB}
+                  <div className="flex items-center justify-center gap-4">
+                    {/* Participante A */}
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`transition-all duration-300 ${
+                          partido.TieneResultado && !partido.EsEmpate
+                            ? partido.GanadorId === partido.ParticipanteAId
+                              ? "text-green-600 font-extrabold animate-pulse"
+                              : "text-gray-400"
+                            : ""
+                        }`}
+                      >
+                        {partido.ParticipanteA}
+                      </span>
+                      {partido.TieneResultado &&
+                        !partido.EsEmpate &&
+                        partido.GanadorId === partido.ParticipanteAId && (
+                          <Trophy className="h-6 w-6 text-yellow-500 animate-bounce" />
+                        )}
+                    </div>
+
+                    <span className="text-gray-500">vs</span>
+
+                    {/* Participante B */}
+                    <div className="flex items-center gap-2">
+                      {partido.TieneResultado &&
+                        !partido.EsEmpate &&
+                        partido.GanadorId === partido.ParticipanteBId && (
+                          <Trophy className="h-6 w-6 text-yellow-500 animate-bounce" />
+                        )}
+                      <span
+                        className={`transition-all duration-300 ${
+                          partido.TieneResultado && !partido.EsEmpate
+                            ? partido.GanadorId === partido.ParticipanteBId
+                              ? "text-green-600 font-extrabold animate-pulse"
+                              : "text-gray-400"
+                            : ""
+                        }`}
+                      >
+                        {partido.ParticipanteB}
+                      </span>
+                    </div>
+                  </div>
                 </CardTitle>
                 <div className="flex items-center justify-center gap-4 mt-4">
                   <Badge variant="outline" className="text-sm">
                     {partido.FixtureNombre}
                   </Badge>
                   {getEstadoBadge(partido.EstadoPartido)}
+                  {/* Badge de Empate */}
+                  {partido.EsEmpate && (
+                    <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
+                      Empate
+                    </Badge>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -466,10 +519,45 @@ export default function PartidoDetallePage() {
 
                     return (
                       <div className="text-center mb-6">
-                        <div className="text-4xl font-bold text-blue-600 mb-2">
-                          {a} - {b}
+                        <div className="flex items-center justify-center gap-4">
+                          <div
+                            className={`text-4xl font-bold transition-all ${
+                              partido.GanadorId === partido.ParticipanteAId
+                                ? "text-green-600 scale-110"
+                                : partido.EsEmpate
+                                ? "text-yellow-600"
+                                : "text-gray-400"
+                            }`}
+                          >
+                            {a}
+                          </div>
+                          <span className="text-2xl text-gray-500">-</span>
+                          <div
+                            className={`text-4xl font-bold transition-all ${
+                              partido.GanadorId === partido.ParticipanteBId
+                                ? "text-green-600 scale-110"
+                                : partido.EsEmpate
+                                ? "text-yellow-600"
+                                : "text-gray-400"
+                            }`}
+                          >
+                            {b}
+                          </div>
                         </div>
-                        <p className="text-gray-600">Resultado Final</p>
+                        <p className="text-gray-600 mt-2">Resultado Final</p>
+                        {partido.TieneResultado && (
+                          <div className="mt-3">
+                            {partido.EsEmpate ? (
+                              <p className="text-yellow-600 font-semibold">
+                                ¡Partido empatado!
+                              </p>
+                            ) : (
+                              <p className="text-green-600 font-semibold">
+                                Ganador: {partido.NombreGanador}
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
