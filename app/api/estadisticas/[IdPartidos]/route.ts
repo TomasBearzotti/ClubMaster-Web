@@ -5,9 +5,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { IdPartidos: string } }
 ) {
-  console.log("=== API Estadisticas GET ===");
   const partidoId = Number.parseInt(params.IdPartidos);
-  console.log("partidoId:", partidoId);
 
   const pool = await getConnection();
   const result = await pool.request().input("partidoId", sql.Int, partidoId)
