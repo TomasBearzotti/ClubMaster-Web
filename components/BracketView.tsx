@@ -32,10 +32,8 @@ interface BracketViewProps {
 export function BracketView({ partidos }: BracketViewProps) {
   const router = useRouter();
 
-  // Agrupar partidos por ronda
   const partidosPorRonda = React.useMemo(() => {
     const agrupados: { [ronda: number]: Partido[] } = {};
-
     partidos.forEach((partido) => {
       const ronda = partido.NumeroRonda || 1;
       if (!agrupados[ronda]) {
@@ -43,22 +41,18 @@ export function BracketView({ partidos }: BracketViewProps) {
       }
       agrupados[ronda].push(partido);
     });
-
     return agrupados;
   }, [partidos]);
-
-  const handleVerPartido = (partidoId: number) => {
-    router.push(`/partidos/${partidoId}`);
-  };
 
   const rondas = Object.keys(partidosPorRonda)
     .map(Number)
     .sort((a, b) => a - b);
 
-  const getNombreRonda = (ronda: number, totalRondas: number) => {
-    const partidosEnRonda = partidosPorRonda[ronda].length;
+  const handleVerPartido = (partidoId: number) => {
+    router.push(`/partidos/${partidoId}`);
+  };
 
-    // Determinar el nombre de la ronda basado en la cantidad de partidos
+  const getNombreRonda = (ronda: number, totalRondas: number) => {
     if (ronda === totalRondas) {
       return "Final";
     } else if (ronda === totalRondas - 1) {
@@ -106,142 +100,61 @@ export function BracketView({ partidos }: BracketViewProps) {
     );
   }
 
-  // Dividir los partidos de la primera ronda en dos mitades (bracket split)
-  const dividirPrimeraRonda = () => {
-    const primeraRonda = rondas[0];
-    const partidosPrimeraRonda = partidosPorRonda[primeraRonda];
-    const mitad = Math.ceil(partidosPrimeraRonda.length / 2);
-
-    return {
-      mitadSuperior: partidosPrimeraRonda.slice(0, mitad),
-      mitadInferior: partidosPrimeraRonda.slice(mitad),
-    };
-  };
-
-  const { mitadSuperior, mitadInferior } = dividirPrimeraRonda();
-
   return (
-    <div className="w-full">
-      {/* Bracket dividido en dos mitades */}
-      <div className="overflow-x-auto pb-4">
-        {/* Mitad Superior */}
-        <div className="mb-12">
-          <div className="flex gap-8 min-w-max px-4">
-            {rondas.map((ronda, indexRonda) => {
-              const partidosRonda = partidosPorRonda[ronda];
-              const partidosMostrar =
-                indexRonda === 0
-                  ? mitadSuperior
-                  : indexRonda === rondas.length - 1
-                  ? [partidosRonda[0]] // Solo la final
-                  : partidosRonda.slice(0, Math.ceil(partidosRonda.length / 2));
+    <div className="w-full flex flex-col items-center justify-center py-4">
+      <div className="flex gap-6 items-center justify-center w-full px-2">
+        {rondas.map((ronda, indexRonda) => {
+          const partidosRonda = partidosPorRonda[ronda];
+          const espacioVertical = indexRonda === 0 ? 8 : indexRonda * 60;
+            
+          return (
+            <div key={ronda} className="flex flex-col items-center flex-shrink-0">
+              <div className="mb-2 text-center">
+                <h3 className="font-bold text-sm text-blue-900 flex items-center justify-center gap-1">
+                  {indexRonda === rondas.length - 1 && (
+                    <Trophy className="h-3 w-3 text-yellow-600" />
+                  )}
+                  {getNombreRonda(ronda, rondas.length)}
+                </h3>
+                <p className="text-xs text-gray-500">
+                  {partidosRonda.length} {partidosRonda.length === 1 ? 'partido' : 'partidos'}
+                </p>
+              </div>
 
-              return (
-                <div
-                  key={`superior-${ronda}`}
-                  className="flex flex-col"
-                  style={{ minWidth: "280px" }}
-                >
-                  {/* Encabezado de la ronda */}
-                  <div className="mb-4 text-center sticky top-0 bg-gradient-to-br from-blue-50 to-gray-100 py-2 z-10">
-                    <h3 className="font-bold text-lg text-blue-900 flex items-center justify-center gap-2">
-                      {indexRonda === rondas.length - 1 && (
-                        <Trophy className="h-5 w-5 text-yellow-600" />
-                      )}
-                      {getNombreRonda(ronda, rondas.length)}
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                      {indexRonda === rondas.length - 1
-                        ? "1 partido"
-                        : `${partidosMostrar.length} partidos`}
-                    </p>
+              <div className="flex flex-col" style={{ gap: `${espacioVertical}px` }}>
+                {partidosRonda.map((partido, index) => (
+                  <div key={partido.IdPartido} style={{ width: "240px" }}>
+                    <PartidoCard
+                      partido={partido}
+                      onVerPartido={handleVerPartido}
+                      getEstadoBadge={getEstadoBadge}
+                      indexRonda={indexRonda}
+                      index={index}
+                    />
                   </div>
-
-                  {/* Partidos de la ronda */}
-                  <div className="space-y-6 flex-1">
-                    {partidosMostrar.map((partido, index) => (
-                      <PartidoCard
-                        key={partido.IdPartido}
-                        partido={partido}
-                        onVerPartido={handleVerPartido}
-                        getEstadoBadge={getEstadoBadge}
-                        indexRonda={indexRonda}
-                        index={index}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Línea separadora */}
-        <div className="border-t-2 border-gray-300 my-8 mx-4"></div>
-
-        {/* Mitad Inferior */}
-        <div>
-          <div className="flex gap-8 min-w-max px-4">
-            {rondas.slice(0, -1).map((ronda, indexRonda) => {
-              const partidosRonda = partidosPorRonda[ronda];
-              const partidosMostrar =
-                indexRonda === 0
-                  ? mitadInferior
-                  : partidosRonda.slice(Math.ceil(partidosRonda.length / 2));
-
-              return (
-                <div
-                  key={`inferior-${ronda}`}
-                  className="flex flex-col"
-                  style={{ minWidth: "280px" }}
-                >
-                  {/* Encabezado de la ronda */}
-                  <div className="mb-4 text-center sticky top-0 bg-gradient-to-br from-blue-50 to-gray-100 py-2 z-10">
-                    <h3 className="font-bold text-lg text-blue-900">
-                      {getNombreRonda(ronda, rondas.length)}
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                      {partidosMostrar.length} partidos
-                    </p>
-                  </div>
-
-                  {/* Partidos de la ronda */}
-                  <div className="space-y-6 flex-1">
-                    {partidosMostrar.map((partido, index) => (
-                      <PartidoCard
-                        key={partido.IdPartido}
-                        partido={partido}
-                        onVerPartido={handleVerPartido}
-                        getEstadoBadge={getEstadoBadge}
-                        indexRonda={indexRonda}
-                        index={index}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Leyenda */}
-      <div className="mt-6 flex items-center justify-center gap-4 flex-wrap text-xs text-gray-600 px-4 border-t pt-4">
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 bg-yellow-100 border border-yellow-300 rounded"></div>
+      <div className="mt-12 flex items-center justify-center gap-6 flex-wrap text-sm text-gray-600 border-t border-gray-200 pt-6 w-full max-w-3xl">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-yellow-100 border border-yellow-300 rounded"></div>
           <span>Programado</span>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 bg-blue-100 border border-blue-300 rounded"></div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-blue-100 border border-blue-300 rounded"></div>
           <span>En Curso</span>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-green-100 border border-green-300 rounded"></div>
           <span>Finalizado</span>
         </div>
-        <div className="flex items-center gap-1">
-          <HelpCircle className="h-3 w-3 text-gray-400" />
-          <span className="text-gray-400">TBD = Por Definir</span>
+        <div className="flex items-center gap-2">
+          <HelpCircle className="h-4 w-4 text-gray-400" />
+          <span className="text-gray-500">TBD = Por Definir</span>
         </div>
       </div>
     </div>
@@ -271,17 +184,13 @@ function PartidoCard({
     scoreB: number | null;
   }>({ scoreA: null, scoreB: null });
 
-  // Fetch de estadísticas cuando hay resultado
   React.useEffect(() => {
     if (partido.TieneResultado && partido.IdPartido) {
       fetch(`/api/estadisticas/${partido.IdPartido}`)
         .then((res) => res.json())
         .then((estadisticas) => {
           if (estadisticas.length > 0) {
-            // El primer campo corresponde al resultado (Goles, Sets, Puntos, etc.)
             const primerCampo = estadisticas[0]?.NombreCampo;
-
-            // Buscar el valor para cada participante
             const scoreA = estadisticas.find(
               (s: any) =>
                 s.ParticipanteId === partido.ParticipanteAId &&
@@ -292,7 +201,6 @@ function PartidoCard({
                 s.ParticipanteId === partido.ParticipanteBId &&
                 s.NombreCampo === primerCampo
             );
-
             setResultados({
               scoreA: scoreA ? Number(scoreA.Valor) : null,
               scoreB: scoreB ? Number(scoreB.Valor) : null,
@@ -315,15 +223,8 @@ function PartidoCard({
           ? "border-dashed border-gray-300 bg-gray-50/50"
           : "hover:border-blue-300 border-gray-200"
       }`}
-      style={{
-        marginTop:
-          indexRonda > 0 && index > 0
-            ? `${Math.pow(2, indexRonda) * 16}px`
-            : "0",
-      }}
     >
       <CardContent className="p-3">
-        {/* Botón Ver Partido - Solo si no es TBD */}
         {!hasTBD && (
           <div className="absolute top-2 right-2">
             <Button
@@ -338,7 +239,6 @@ function PartidoCard({
           </div>
         )}
 
-        {/* Badge TBD si aplica */}
         {hasTBD && (
           <div className="absolute top-2 right-2">
             <Badge variant="secondary" className="text-xs">
@@ -347,7 +247,6 @@ function PartidoCard({
           </div>
         )}
 
-        {/* Fecha y hora */}
         {partido.FechaHora && !hasTBD && (
           <div className="text-xs text-gray-500 mb-2 flex items-center gap-1">
             <Clock className="h-3 w-3" />
@@ -355,9 +254,7 @@ function PartidoCard({
           </div>
         )}
 
-        {/* Participantes */}
         <div className="space-y-2">
-          {/* Participante A */}
           <div
             className={`flex items-center justify-between p-2 rounded border transition-all ${
               !partido.ParticipanteA
@@ -370,7 +267,6 @@ function PartidoCard({
             }`}
           >
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              {/* Trofeo para ganador - SOLO cuando revealed */}
               {revealed &&
                 partido.TieneResultado &&
                 !partido.EsEmpate &&
@@ -393,7 +289,6 @@ function PartidoCard({
               </span>
             </div>
 
-            {/* Resultado oculto/revelado */}
             {partido.TieneResultado && partido.ParticipanteA && (
               <button
                 onClick={() => setRevealed(!revealed)}
@@ -430,7 +325,6 @@ function PartidoCard({
             }`}
           >
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              {/* Trofeo para ganador - SOLO cuando revealed */}
               {revealed &&
                 partido.TieneResultado &&
                 !partido.EsEmpate &&
@@ -453,7 +347,6 @@ function PartidoCard({
               </span>
             </div>
 
-            {/* Resultado oculto/revelado */}
             {partido.TieneResultado && partido.ParticipanteB && (
               <button
                 onClick={() => setRevealed(!revealed)}
@@ -478,12 +371,10 @@ function PartidoCard({
           </div>
         </div>
 
-        {/* Estado, resultado y lugar */}
         {!hasTBD && (
           <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-1">
               {getEstadoBadge(partido.Estado)}
-              {/* Badge de empate - SOLO cuando revealed */}
               {revealed && partido.EsEmpate && (
                 <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 text-xs">
                   Empate
