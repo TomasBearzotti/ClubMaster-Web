@@ -5,6 +5,19 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Legend,
+  Tooltip,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from "recharts";
 
 export const dynamic = "force-dynamic";
 import {
@@ -31,7 +44,16 @@ interface EstadisticasDashboard {
   cuotasVencidas: number;
   totalTorneos: number;
   torneosActivos: number;
+  totalPartidos: number;
+  partidosProgramados: number;
   totalArbitros: number;
+}
+
+interface SociosPorMes {
+  mes: string;
+  cantidad: number;
+  nuevos: number;
+  bajas: number;
 }
 
 export default function DashboardPage() {
@@ -39,6 +61,7 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [permisos, setPermisos] = useState<string[]>([]);
+  const [sociosPorMes, setSociosPorMes] = useState<SociosPorMes[]>([]);
   const [stats, setStats] = useState<EstadisticasDashboard>({
     totalSocios: 0,
     sociosActivos: 0,
@@ -48,6 +71,8 @@ export default function DashboardPage() {
     cuotasVencidas: 0,
     totalTorneos: 0,
     torneosActivos: 0,
+    totalPartidos: 0,
+    partidosProgramados: 0,
     totalArbitros: 0,
   });
 
@@ -68,6 +93,7 @@ export default function DashboardPage() {
 
         // cargar estadísticas
         await fetchDashboardStats();
+        await fetchSociosPorMes();
       } catch (err) {
         console.error("Error inicializando dashboard:", err);
       } finally {
@@ -81,11 +107,12 @@ export default function DashboardPage() {
   const fetchDashboardStats = async () => {
     setLoading(true);
     try {
-      const [sociosRes, cuotasRes, torneosRes, arbitrosRes] = await Promise.all(
+      const [sociosRes, cuotasRes, torneosRes, partidosRes, arbitrosRes] = await Promise.all(
         [
           fetch("/api/socios"),
           fetch("/api/cuotas"),
           fetch("/api/torneos"),
+          fetch("/api/partidos"),
           fetch("/api/arbitros"),
         ]
       );
@@ -93,6 +120,7 @@ export default function DashboardPage() {
       const sociosData = sociosRes.ok ? await sociosRes.json() : [];
       const cuotasData = cuotasRes.ok ? await cuotasRes.json() : [];
       const torneosData = torneosRes.ok ? await torneosRes.json() : [];
+      const partidosData = partidosRes.ok ? await partidosRes.json() : [];
       const arbitrosData = arbitrosRes.ok ? await arbitrosRes.json() : [];
 
       const totalSocios = sociosData.length;
@@ -116,7 +144,12 @@ export default function DashboardPage() {
       const totalTorneos = torneosData.length;
       const torneosActivos = torneosData.filter(
         (t: any) => t.Estado === 0
-      ).length; // Asumiendo 0 es activo/pendiente
+      ).length;
+
+      const totalPartidos = partidosData.length;
+      const partidosProgramados = partidosData.filter(
+        (p: any) => p.Estado === 0
+      ).length;
 
       const totalArbitros = arbitrosData.length;
 
@@ -129,6 +162,8 @@ export default function DashboardPage() {
         cuotasVencidas: vencidas,
         totalTorneos,
         torneosActivos,
+        totalPartidos,
+        partidosProgramados,
         totalArbitros,
       });
     } catch (error) {
@@ -140,6 +175,62 @@ export default function DashboardPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSociosPorMes = async () => {
+    try {
+      const sociosRes = await fetch("/api/socios");
+      if (!sociosRes.ok) return;
+      
+      const sociosData = await sociosRes.json();
+      
+      // Agrupar socios por mes de registro (últimos 6 meses)
+      const hoy = new Date();
+      const mesesAtras = 6;
+      const datosPorMes: { [key: string]: { total: number; nuevos: number } } = {};
+      
+      // Inicializar últimos 6 meses
+      for (let i = mesesAtras - 1; i >= 0; i--) {
+        const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+        const mesKey = fecha.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' });
+        datosPorMes[mesKey] = { total: 0, nuevos: 0 };
+      }
+      
+      // Contar socios por mes de registro
+      sociosData.forEach((socio: any) => {
+        if (socio.FechaAlta) {
+          const fechaAlta = new Date(socio.FechaAlta);
+          const mesKey = fechaAlta.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' });
+          
+          if (datosPorMes[mesKey] !== undefined) {
+            datosPorMes[mesKey].nuevos++;
+          }
+        }
+      });
+      
+      // Calcular totales acumulados
+      let acumulado = sociosData.filter((s: any) => {
+        if (!s.FechaAlta) return false;
+        const fechaAlta = new Date(s.FechaAlta);
+        const primeraFecha = new Date(hoy.getFullYear(), hoy.getMonth() - mesesAtras + 1, 1);
+        return fechaAlta < primeraFecha;
+      }).length;
+      
+      const resultado: SociosPorMes[] = [];
+      Object.keys(datosPorMes).forEach((mes) => {
+        acumulado += datosPorMes[mes].nuevos;
+        resultado.push({
+          mes,
+          cantidad: acumulado,
+          nuevos: datosPorMes[mes].nuevos,
+          bajas: 0, // Por ahora en 0, se puede calcular con FechaBaja si existe
+        });
+      });
+      
+      setSociosPorMes(resultado);
+    } catch (error) {
+      console.error("Error fetching socios por mes:", error);
     }
   };
 
@@ -278,6 +369,22 @@ export default function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
+                Partidos Programados
+              </CardTitle>
+              <ClipboardList className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">
+                {stats.partidosProgramados}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                de {stats.totalPartidos} totales
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
                 Árbitros Registrados
               </CardTitle>
               <ClipboardList className="h-4 w-4 text-purple-600" />
@@ -289,6 +396,102 @@ export default function DashboardPage() {
               <p className="text-xs text-muted-foreground">
                 Disponibilidad gestionable
               </p>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Sección de Gráficos */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+          {/* Gráfico de Cuotas */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Estado de Cuotas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: 'Pagadas', value: stats.cuotasPagadas, color: '#10b981' },
+                      { name: 'Pendientes', value: stats.cuotasPendientes, color: '#f59e0b' },
+                      { name: 'Vencidas', value: stats.cuotasVencidas, color: '#ef4444' },
+                    ]}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {[
+                      { name: 'Pagadas', value: stats.cuotasPagadas, color: '#10b981' },
+                      { name: 'Pendientes', value: stats.cuotasPendientes, color: '#f59e0b' },
+                      { name: 'Vencidas', value: stats.cuotasVencidas, color: '#ef4444' },
+                    ].map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Gráfico de Evolución de Socios */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Evolución de Socios</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {sociosPorMes.length > 1 && sociosPorMes[sociosPorMes.length - 1].nuevos > 0 && (
+                  <span className="text-green-600 font-semibold">
+                    +{sociosPorMes[sociosPorMes.length - 1].nuevos} nuevos este mes
+                  </span>
+                )}
+                {sociosPorMes.length > 1 && sociosPorMes[sociosPorMes.length - 1].nuevos === 0 && (
+                  <span className="text-gray-600">Sin cambios este mes</span>
+                )}
+                {sociosPorMes.length > 1 && sociosPorMes[sociosPorMes.length - 1].nuevos < 0 && (
+                  <span className="text-red-600 font-semibold">
+                    {sociosPorMes[sociosPorMes.length - 1].nuevos} socios perdidos
+                  </span>
+                )}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={sociosPorMes}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="mes" />
+                  <YAxis />
+                  <Tooltip 
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-white dark:bg-gray-800 p-3 border rounded shadow-lg">
+                            <p className="font-semibold">{payload[0].payload.mes}</p>
+                            <p className="text-sm">Total: {payload[0].value}</p>
+                            <p className="text-sm text-green-600">
+                              Nuevos: +{payload[0].payload.nuevos}
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="cantidad"
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    name="Total Socios"
+                    dot={{ fill: '#3b82f6', r: 4 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
         </section>
