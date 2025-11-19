@@ -13,6 +13,7 @@ export async function GET() {
         p.Dni,
         p.Mail AS Email,         
         p.Telefono,
+        p.FechaRegistro,
         s.Estado,
         s.TipoMembresiaId,
         tm.Descripcion AS TipoMembresia,
@@ -72,9 +73,9 @@ export async function POST(request: NextRequest) {
       .input("dni", sql.NVarChar, dni)
       .input("mail", sql.NVarChar, email)
       .input("telefono", sql.NVarChar, telefono || null).query(`
-        INSERT INTO Personas (Nombre, Apellido, Dni, Mail, Telefono)
+        INSERT INTO Personas (Nombre, Apellido, Dni, Mail, Telefono, FechaRegistro)
         OUTPUT INSERTED.IdPersona
-        VALUES (@nombre, @apellido, @dni, @mail, @telefono)
+        VALUES (@nombre, @apellido, @dni, @mail, @telefono, GETDATE())
       `);
 
     const personaId = personaResult.recordset[0].IdPersona;

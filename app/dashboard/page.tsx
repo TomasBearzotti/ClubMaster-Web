@@ -54,6 +54,8 @@ interface SociosPorMes {
   cantidad: number;
   nuevos: number;
   bajas: number;
+  activos: number;
+  inactivos: number;
 }
 
 export default function DashboardPage() {
@@ -188,20 +190,20 @@ export default function DashboardPage() {
       // Agrupar socios por mes de registro (últimos 6 meses)
       const hoy = new Date();
       const mesesAtras = 6;
-      const datosPorMes: { [key: string]: { total: number; nuevos: number } } = {};
+      const datosPorMes: { [key: string]: { total: number; nuevos: number; activos: number; inactivos: number } } = {};
       
       // Inicializar últimos 6 meses
       for (let i = mesesAtras - 1; i >= 0; i--) {
         const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
         const mesKey = fecha.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' });
-        datosPorMes[mesKey] = { total: 0, nuevos: 0 };
+        datosPorMes[mesKey] = { total: 0, nuevos: 0, activos: 0, inactivos: 0 };
       }
       
       // Contar socios por mes de registro
       sociosData.forEach((socio: any) => {
-        if (socio.FechaAlta) {
-          const fechaAlta = new Date(socio.FechaAlta);
-          const mesKey = fechaAlta.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' });
+        if (socio.FechaRegistro) {
+          const fechaRegistro = new Date(socio.FechaRegistro);
+          const mesKey = fechaRegistro.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' });
           
           if (datosPorMes[mesKey] !== undefined) {
             datosPorMes[mesKey].nuevos++;
@@ -209,22 +211,47 @@ export default function DashboardPage() {
         }
       });
       
-      // Calcular totales acumulados
-      let acumulado = sociosData.filter((s: any) => {
-        if (!s.FechaAlta) return false;
-        const fechaAlta = new Date(s.FechaAlta);
+      // Calcular totales acumulados (activos e inactivos por mes)
+      let acumuladoTotal = 0;
+      let acumuladoActivos = 0;
+      let acumuladoInactivos = 0;
+      
+      // Contar socios anteriores al periodo
+      sociosData.forEach((s: any) => {
+        if (!s.FechaRegistro) return;
+        const fechaRegistro = new Date(s.FechaRegistro);
         const primeraFecha = new Date(hoy.getFullYear(), hoy.getMonth() - mesesAtras + 1, 1);
-        return fechaAlta < primeraFecha;
-      }).length;
+        if (fechaRegistro < primeraFecha) {
+          acumuladoTotal++;
+          if (s.Estado === 1) acumuladoActivos++;
+          else acumuladoInactivos++;
+        }
+      });
       
       const resultado: SociosPorMes[] = [];
       Object.keys(datosPorMes).forEach((mes) => {
-        acumulado += datosPorMes[mes].nuevos;
+        // Contar nuevos activos e inactivos del mes
+        const nuevosDelMes = sociosData.filter((s: any) => {
+          if (!s.FechaRegistro) return false;
+          const fechaRegistro = new Date(s.FechaRegistro);
+          const mesKey = fechaRegistro.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' });
+          return mesKey === mes;
+        });
+        
+        const nuevosActivos = nuevosDelMes.filter((s: any) => s.Estado === 1).length;
+        const nuevosInactivos = nuevosDelMes.filter((s: any) => s.Estado !== 1).length;
+        
+        acumuladoTotal += datosPorMes[mes].nuevos;
+        acumuladoActivos += nuevosActivos;
+        acumuladoInactivos += nuevosInactivos;
+        
         resultado.push({
           mes,
-          cantidad: acumulado,
+          cantidad: acumuladoTotal,
           nuevos: datosPorMes[mes].nuevos,
-          bajas: 0, // Por ahora en 0, se puede calcular con FechaBaja si existe
+          bajas: 0,
+          activos: acumuladoActivos,
+          inactivos: acumuladoInactivos,
         });
       });
       
@@ -302,54 +329,141 @@ export default function DashboardPage() {
           <DatabaseStatus />
         </div>
 
-        {/* Sección de Estadísticas */}
+        {/* Sección de Gráficos Principales */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+          {/* Gráfico de Evolución de Socios */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Evolución de Socios
+              </CardTitle>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-3xl font-bold">{stats.totalSocios}</p>
+                  <p className="text-sm text-muted-foreground">Total de socios</p>
+                </div>
+                <div className="text-right">
+                  {sociosPorMes.length > 0 && sociosPorMes[sociosPorMes.length - 1].nuevos > 0 && (
+                    <p className="text-sm text-green-600 font-semibold">
+                      +{sociosPorMes[sociosPorMes.length - 1].nuevos} este mes
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    <span className="text-green-600 font-semibold">{stats.sociosActivos} activos</span>
+                    {" • "}
+                    <span className="text-red-600 font-semibold">{stats.totalSocios - stats.sociosActivos} inactivos</span>
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={sociosPorMes}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="mes" />
+                  <YAxis />
+                  <Tooltip 
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-white dark:bg-gray-800 p-3 border rounded shadow-lg">
+                            <p className="font-semibold">{payload[0].payload.mes}</p>
+                            <p className="text-sm">Total: {payload[0].payload.cantidad}</p>
+                            <p className="text-sm text-green-600">
+                              Activos: {payload[0].payload.activos}
+                            </p>
+                            <p className="text-sm text-red-600">
+                              Inactivos: {payload[0].payload.inactivos}
+                            </p>
+                            <p className="text-sm text-blue-600">
+                              Nuevos: +{payload[0].payload.nuevos}
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="activos"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    name="Socios Activos"
+                    dot={{ fill: '#10b981', r: 4 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="inactivos"
+                    stroke="#ef4444"
+                    strokeWidth={2}
+                    name="Socios Inactivos"
+                    dot={{ fill: '#ef4444', r: 4 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Gráfico de Cuotas */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Estado de Cuotas
+              </CardTitle>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-3xl font-bold">{stats.totalCuotas}</p>
+                  <p className="text-sm text-muted-foreground">Total de cuotas</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-red-600 font-semibold">
+                    {stats.cuotasPendientes + stats.cuotasVencidas} sin pagar
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {stats.cuotasPendientes} pendientes • {stats.cuotasVencidas} vencidas
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: 'Pagadas', value: stats.cuotasPagadas, color: '#10b981' },
+                      { name: 'Pendientes', value: stats.cuotasPendientes, color: '#f59e0b' },
+                      { name: 'Vencidas', value: stats.cuotasVencidas, color: '#ef4444' },
+                    ]}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {[
+                      { name: 'Pagadas', value: stats.cuotasPagadas, color: '#10b981' },
+                      { name: 'Pendientes', value: stats.cuotasPendientes, color: '#f59e0b' },
+                      { name: 'Vencidas', value: stats.cuotasVencidas, color: '#ef4444' },
+                    ].map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Sección de Estadísticas Restantes */}
         <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Socios
-              </CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalSocios}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.sociosActivos} activos
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Cuotas Pagadas
-              </CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {stats.cuotasPagadas}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                de {stats.totalCuotas} totales
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Cuotas Vencidas
-              </CardTitle>
-              <AlertCircle className="h-4 w-4 text-red-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">
-                {stats.cuotasVencidas}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {stats.cuotasPendientes} pendientes
-              </p>
-            </CardContent>
-          </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -396,102 +510,6 @@ export default function DashboardPage() {
               <p className="text-xs text-muted-foreground">
                 Disponibilidad gestionable
               </p>
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* Sección de Gráficos */}
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-          {/* Gráfico de Cuotas */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Estado de Cuotas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={[
-                      { name: 'Pagadas', value: stats.cuotasPagadas, color: '#10b981' },
-                      { name: 'Pendientes', value: stats.cuotasPendientes, color: '#f59e0b' },
-                      { name: 'Vencidas', value: stats.cuotasVencidas, color: '#ef4444' },
-                    ]}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {[
-                      { name: 'Pagadas', value: stats.cuotasPagadas, color: '#10b981' },
-                      { name: 'Pendientes', value: stats.cuotasPendientes, color: '#f59e0b' },
-                      { name: 'Vencidas', value: stats.cuotasVencidas, color: '#ef4444' },
-                    ].map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          {/* Gráfico de Evolución de Socios */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Evolución de Socios</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                {sociosPorMes.length > 1 && sociosPorMes[sociosPorMes.length - 1].nuevos > 0 && (
-                  <span className="text-green-600 font-semibold">
-                    +{sociosPorMes[sociosPorMes.length - 1].nuevos} nuevos este mes
-                  </span>
-                )}
-                {sociosPorMes.length > 1 && sociosPorMes[sociosPorMes.length - 1].nuevos === 0 && (
-                  <span className="text-gray-600">Sin cambios este mes</span>
-                )}
-                {sociosPorMes.length > 1 && sociosPorMes[sociosPorMes.length - 1].nuevos < 0 && (
-                  <span className="text-red-600 font-semibold">
-                    {sociosPorMes[sociosPorMes.length - 1].nuevos} socios perdidos
-                  </span>
-                )}
-              </p>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={sociosPorMes}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mes" />
-                  <YAxis />
-                  <Tooltip 
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-white dark:bg-gray-800 p-3 border rounded shadow-lg">
-                            <p className="font-semibold">{payload[0].payload.mes}</p>
-                            <p className="text-sm">Total: {payload[0].value}</p>
-                            <p className="text-sm text-green-600">
-                              Nuevos: +{payload[0].payload.nuevos}
-                            </p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="cantidad"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                    name="Total Socios"
-                    dot={{ fill: '#3b82f6', r: 4 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
             </CardContent>
           </Card>
         </section>

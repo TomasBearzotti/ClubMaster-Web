@@ -43,9 +43,9 @@ export async function POST(req: NextRequest) {
       .input("dni", sql.NVarChar, dni)
       .input("telefono", sql.NVarChar, telefono ?? null)
       .input("mail", sql.NVarChar, mail).query(`
-        INSERT INTO Personas (Nombre, Apellido, Dni, Telefono, Mail)
+        INSERT INTO Personas (Nombre, Apellido, Dni, Telefono, Mail, FechaRegistro)
         OUTPUT INSERTED.IdPersona AS IdPersona
-        VALUES (@nombre, @apellido, @dni, @telefono, @mail)
+        VALUES (@nombre, @apellido, @dni, @telefono, @mail, GETDATE())
       `);
 
     const idPersona = insert.recordset[0].IdPersona;
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
         .input("like", sql.NVarChar, `%${q.trim()}%`)
         .input("q", sql.NVarChar, q.trim()).query(`
           SELECT TOP 50
-            IdPersona, Nombre, Apellido, Dni, Telefono, Mail
+            IdPersona, Nombre, Apellido, Dni, Telefono, Mail, FechaRegistro
           FROM Personas
           WHERE Nombre  LIKE @like
              OR Apellido LIKE @like
@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
     } else {
       result = await pool.request().query(`
         SELECT TOP 100
-          IdPersona, Nombre, Apellido, Dni, Telefono, Mail
+          IdPersona, Nombre, Apellido, Dni, Telefono, Mail, FechaRegistro
         FROM Personas
         ORDER BY IdPersona DESC
       `);
@@ -100,6 +100,7 @@ export async function GET(req: NextRequest) {
         dni: p.Dni ?? "",
         telefono: p.Telefono ?? "",
         mail: p.Mail ?? "",
+        fechaRegistro: p.FechaRegistro ?? null,
       }))
     );
   } catch (error) {

@@ -29,6 +29,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -46,16 +56,9 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-interface Socio {
-  IdSocio: number;
-  Nombre: string;
-  Apellido: string;
-  DNI: string;
-  TipoMembresia: string;
-}
-
 interface Cuota {
   IdCuota: number;
+  NombreSocio: string;
   Periodo: string;
   Monto: number;
   FechaVencimiento: string;
@@ -76,9 +79,6 @@ export default function RegistrarPagoPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedSocio, setSelectedSocio] = useState<Socio | null>(null);
-  const [sociosFiltrados, setSociosFiltrados] = useState<Socio[]>([]);
-  const [loadingSocios, setLoadingSocios] = useState(false);
   const [cuotasPendientesSocio, setCuotasPendientesSocio] = useState<Cuota[]>(
     []
   );
@@ -90,66 +90,26 @@ export default function RegistrarPagoPage() {
     null
   );
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [mesSeleccionado, setMesSeleccionado] = useState<string>("todos");
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [itemsPorPagina, setItemsPorPagina] = useState(20);
 
-  // Búsqueda de socios (debounced)
-  useEffect(() => {
-    const fetchSocios = async () => {
-      if (searchTerm.length < 3) {
-        setSociosFiltrados([]);
-        return;
-      }
-      setLoadingSocios(true);
-      try {
-        const res = await fetch(
-          `/api/socios?search=${encodeURIComponent(searchTerm)}`
-        );
-        if (res.ok) {
-          const data = await res.json();
-          setSociosFiltrados(data);
-        } else {
-          setSociosFiltrados([]);
-          toast({
-            title: "Error",
-            description: "No se pudieron cargar los socios.",
-            variant: "destructive",
-          });
-        }
-      } catch (e) {
-        console.error(e);
-        setSociosFiltrados([]);
-        toast({
-          title: "Error",
-          description: "Error de red al buscar socios.",
-          variant: "destructive",
-        });
-      } finally {
-        setLoadingSocios(false);
-      }
-    };
-    const t = setTimeout(fetchSocios, 500);
-    return () => clearTimeout(t);
-  }, [searchTerm, toast]);
-
-  // Cuotas pendientes del socio elegido
+  // Cargar todas las cuotas pendientes y vencidas
   useEffect(() => {
     const fetchCuotas = async () => {
-      if (!selectedSocio) {
-        setCuotasPendientesSocio([]);
-        return;
-      }
       setLoadingCuotas(true);
       try {
-        const res = await fetch(
-          `/api/cuotas?socioId=${selectedSocio.IdSocio}&estado=0`
-        );
+        const res = await fetch("/api/cuotas");
         if (res.ok) {
           const data = await res.json();
-          setCuotasPendientesSocio(data);
+          // Filtrar solo pendientes y vencidas
+          const cuotasNoPagadas = data.filter((c: Cuota) => c.Estado === 0);
+          setCuotasPendientesSocio(cuotasNoPagadas);
         } else {
           setCuotasPendientesSocio([]);
           toast({
             title: "Error",
-            description: "No se pudieron cargar las cuotas pendientes.",
+            description: "No se pudieron cargar las cuotas.",
             variant: "destructive",
           });
         }
@@ -158,7 +118,7 @@ export default function RegistrarPagoPage() {
         setCuotasPendientesSocio([]);
         toast({
           title: "Error",
-          description: "Error de red al cargar cuotas pendientes.",
+          description: "Error de red al cargar cuotas.",
           variant: "destructive",
         });
       } finally {
@@ -166,7 +126,7 @@ export default function RegistrarPagoPage() {
       }
     };
     fetchCuotas();
-  }, [selectedSocio, toast]);
+  }, [toast]);
 
   // Calcular recargo cuando se abre el diálogo con una cuota
   const handlePagarCuota = async (cuota: Cuota) => {
@@ -253,11 +213,11 @@ export default function RegistrarPagoPage() {
       }
 
       // refrescar cuotas pendientes
-      if (selectedSocio) {
-        const upd = await fetch(
-          `/api/cuotas?socioId=${selectedSocio.IdSocio}&estado=0`
-        );
-        if (upd.ok) setCuotasPendientesSocio(await upd.json());
+      const upd = await fetch("/api/cuotas");
+      if (upd.ok) {
+        const data = await upd.json();
+        const cuotasNoPagadas = data.filter((c: Cuota) => c.Estado === 0);
+        setCuotasPendientesSocio(cuotasNoPagadas);
       }
 
       // cerrar diálogo
@@ -293,15 +253,41 @@ export default function RegistrarPagoPage() {
     return <Badge className="bg-yellow-100 text-yellow-800">Pendiente</Badge>;
   };
 
-  const handleSelectSocio = (socio: Socio) => {
-    setSelectedSocio(socio);
-    setSearchTerm("");
-    setSelectedCuota(null);
-    setMetodoPago("");
-    setCalculoRecargo(null);
-  };
-
   const handleVolver = () => router.push("/cuotas");
+
+  // Filtrado y paginación
+  const mesesDisponibles = Array.from(
+    new Set(cuotasPendientesSocio.map((c) => c.Periodo))
+  ).sort((a, b) => {
+    const [mesA, anioA] = a.split("/");
+    const [mesB, anioB] = b.split("/");
+    if (anioA !== anioB) return Number(anioB) - Number(anioA);
+    return Number(mesB) - Number(mesA);
+  });
+
+  const cuotasFiltradas = cuotasPendientesSocio.filter((cuota) => {
+    // Filtro de búsqueda (solo si hay texto)
+    const cumpleBusqueda = !searchTerm ||
+      cuota.NombreSocio.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cuota.Periodo.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Filtro de mes (solo si no es "todos")
+    const cumpleMes =
+      mesSeleccionado === "todos" || cuota.Periodo === mesSeleccionado;
+    
+    return cumpleBusqueda && cumpleMes;
+  });
+
+  // Paginación
+  const totalPaginas = Math.ceil(cuotasFiltradas.length / itemsPorPagina);
+  const indexInicio = (paginaActual - 1) * itemsPorPagina;
+  const indexFin = indexInicio + itemsPorPagina;
+  const cuotasPaginadas = cuotasFiltradas.slice(indexInicio, indexFin);
+
+  // Resetear a página 1 cuando cambian los filtros
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [searchTerm, mesSeleccionado, itemsPorPagina]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100">
@@ -331,114 +317,103 @@ export default function RegistrarPagoPage() {
           </h2>
         </div>
 
-        {/* Búsqueda de Socio */}
+        {/* Cuotas Pendientes y Vencidas */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Search className="h-5 w-5" />
-              Buscar Socio
-            </CardTitle>
-            <CardDescription>Busca por nombre, apellido o DNI</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="relative">
-                <Label htmlFor="search">Nombre, apellido o DNI</Label>
-                <Input
-                  id="search"
-                  placeholder="Ej: Juan Pérez o 12345678"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="mt-1"
-                />
-                {loadingSocios && (
-                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 animate-spin text-blue-500" />
-                )}
+            <div className="flex flex-col gap-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <CreditCard className="h-5 w-5" />
+                    Cuotas a Cobrar
+                  </CardTitle>
+                  <CardDescription>
+                    {mesSeleccionado === "todos"
+                      ? "Todas las cuotas pendientes y vencidas"
+                      : `Cuotas del período ${mesSeleccionado}`}
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Buscar socio..."
+                    className="w-64"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  <Button variant="outline" size="icon">
+                    <Search className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
 
-              {searchTerm.length >= 3 &&
-                sociosFiltrados.length > 0 &&
-                !selectedSocio && (
-                  <div className="border rounded-md bg-white max-h-48 overflow-y-auto">
-                    {sociosFiltrados.map((socio) => (
-                      <div
-                        key={socio.IdSocio}
-                        className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
-                        onClick={() => handleSelectSocio(socio)}
-                      >
-                        <div className="font-medium">
-                          {socio.Nombre} {socio.Apellido}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          DNI: {socio.DNI} — {socio.TipoMembresia}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-              {searchTerm.length >= 3 &&
-                sociosFiltrados.length === 0 &&
-                !loadingSocios &&
-                !selectedSocio && (
-                  <div className="p-3 text-center text-gray-500">
-                    No se encontraron socios.
-                  </div>
-                )}
-
-              {selectedSocio && (
-                <div className="bg-green-50 border border-green-200 rounded-md p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-semibold text-green-900">
-                        {selectedSocio.Nombre} {selectedSocio.Apellido}
-                      </h3>
-                      <p className="text-green-700">DNI: {selectedSocio.DNI}</p>
-                      <p className="text-green-600 text-sm">
-                        {selectedSocio.TipoMembresia}
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedSocio(null)}
-                      className="text-green-600"
-                    >
-                      Cambiar Socio
-                    </Button>
-                  </div>
+              {/* Filtros y controles */}
+              <div className="flex items-center justify-between flex-wrap gap-4 pt-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Período:</span>
+                  <Select value={mesSeleccionado} onValueChange={setMesSeleccionado}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Seleccionar período" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos los períodos</SelectItem>
+                      {mesesDisponibles.map((mes) => (
+                        <SelectItem key={mes} value={mes}>
+                          {mes}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
+
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Mostrar:</span>
+                  <Select
+                    value={itemsPorPagina.toString()}
+                    onValueChange={(value) => setItemsPorPagina(Number(value))}
+                  >
+                    <SelectTrigger className="w-[100px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span className="text-sm text-muted-foreground">por página</span>
+                </div>
+              </div>
+
+              {/* Contador */}
+              <div className="text-sm text-muted-foreground">
+                Mostrando {indexInicio + 1}-{Math.min(indexFin, cuotasFiltradas.length)} de{" "}
+                {cuotasFiltradas.length} cuotas
+                {cuotasFiltradas.length !== cuotasPendientesSocio.length && (
+                  <span> (filtradas de {cuotasPendientesSocio.length} totales)</span>
+                )}
+              </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Cuotas Pendientes */}
-        {selectedSocio && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
-                Cuotas Pendientes
-              </CardTitle>
-              <CardDescription>
-                Selecciona la cuota que deseas cobrar a {selectedSocio.Nombre}{" "}
-                {selectedSocio.Apellido}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadingCuotas ? (
-                <div className="flex justify-center items-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                </div>
-              ) : cuotasPendientesSocio.length === 0 ? (
+          </CardHeader>
+          <CardContent>
+            {loadingCuotas ? (
+              <div className="flex justify-center items-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              </div>
+            ) : cuotasPendientesSocio.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No hay cuotas pendientes.
+              </div>
+            ) : cuotasPaginadas.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
-                  No hay cuotas pendientes para este socio.
+                  No se encontraron cuotas con los filtros aplicados.
                 </div>
               ) : (
+                <>
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Socio</TableHead>
                       <TableHead>Período</TableHead>
                       <TableHead className="text-right">Monto</TableHead>
                       <TableHead>Vencimiento</TableHead>
@@ -447,11 +422,12 @@ export default function RegistrarPagoPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {cuotasPendientesSocio.map((cuota) => (
+                    {cuotasPaginadas.map((cuota) => (
                       <TableRow key={cuota.IdCuota}>
                         <TableCell className="font-medium">
-                          {cuota.Periodo}
+                          {cuota.NombreSocio}
                         </TableCell>
+                        <TableCell>{cuota.Periodo}</TableCell>
                         <TableCell className="text-right">
                           {formatCurrency(cuota.Monto)}
                         </TableCell>
@@ -477,10 +453,78 @@ export default function RegistrarPagoPage() {
                     ))}
                   </TableBody>
                 </Table>
+
+              {/* Paginación */}
+              {totalPaginas > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPaginaActual(1)}
+                    disabled={paginaActual === 1}
+                  >
+                    Primera
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPaginaActual(paginaActual - 1)}
+                    disabled={paginaActual === 1}
+                  >
+                    Anterior
+                  </Button>
+
+                  <div className="flex gap-1">
+                    {Array.from({ length: totalPaginas }, (_, i) => i + 1)
+                      .filter((num) => {
+                        return (
+                          num === 1 ||
+                          num === totalPaginas ||
+                          (num >= paginaActual - 2 && num <= paginaActual + 2)
+                        );
+                      })
+                      .map((num, idx, arr) => {
+                        const prevNum = arr[idx - 1];
+                        const showEllipsis = prevNum && num - prevNum > 1;
+
+                        return (
+                          <div key={num} className="flex items-center gap-1">
+                            {showEllipsis && <span className="px-2">...</span>}
+                            <Button
+                              variant={paginaActual === num ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setPaginaActual(num)}
+                              className="w-10"
+                            >
+                              {num}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPaginaActual(paginaActual + 1)}
+                    disabled={paginaActual === totalPaginas}
+                  >
+                    Siguiente
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPaginaActual(totalPaginas)}
+                    disabled={paginaActual === totalPaginas}
+                  >
+                    Última
+                  </Button>
+                </div>
               )}
-            </CardContent>
-          </Card>
-        )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
         {/* Dialog de Pago (igual al socio, con Efectivo extra) */}
         <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>

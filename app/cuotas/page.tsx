@@ -21,6 +21,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   ArrowLeft,
   CreditCard,
   Plus,
@@ -33,6 +40,17 @@ import {
   User,
   Loader2,
 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
 
 interface Cuota {
   IdCuota: number;
@@ -58,6 +76,9 @@ export default function GestionCuotasPage() {
   const [cuotas, setCuotas] = useState<Cuota[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
+  const [mesSeleccionado, setMesSeleccionado] = useState<string>("todos");
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [itemsPorPagina, setItemsPorPagina] = useState(20);
   const [estadisticas, setEstadisticas] = useState<EstadisticasCuotas>({
     totalCuotas: 0,
     cuotasPagadas: 0,
@@ -124,11 +145,59 @@ export default function GestionCuotasPage() {
     }
   };
 
-  const cuotasFiltradas = cuotas.filter(
-    (cuota) =>
+  // Obtener meses únicos de las cuotas
+  const mesesDisponibles = Array.from(
+    new Set(cuotas.map((c) => c.Periodo))
+  ).sort((a, b) => {
+    // Ordenar de más reciente a más antiguo
+    const [mesA, anioA] = a.split("/");
+    const [mesB, anioB] = b.split("/");
+    if (anioA !== anioB) return Number(anioB) - Number(anioA);
+    return Number(mesB) - Number(mesA);
+  });
+
+  const cuotasFiltradas = cuotas.filter((cuota) => {
+    // Filtro de búsqueda (solo si hay texto)
+    const cumpleBusqueda = !searchTerm || 
       cuota.NombreSocio.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cuota.Periodo.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+      cuota.Periodo.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Filtro de mes (solo si no es "todos")
+    const cumpleMes =
+      mesSeleccionado === "todos" || cuota.Periodo === mesSeleccionado;
+    
+    return cumpleBusqueda && cumpleMes;
+  });
+
+  // Calcular estadísticas filtradas
+  const estadisticasFiltradas = {
+    totalCuotas: cuotasFiltradas.length,
+    cuotasPagadas: cuotasFiltradas.filter((c) => c.Estado === 1).length,
+    cuotasPendientes: cuotasFiltradas.filter((c) => c.Estado === 0).length,
+    cuotasVencidas: cuotasFiltradas.filter((c) => {
+      const fechaVenc = new Date(c.FechaVencimiento);
+      const hoy = new Date();
+      return c.Estado === 0 && fechaVenc < hoy;
+    }).length,
+    montoTotal: cuotasFiltradas.reduce(
+      (sum, c) => sum + Number.parseFloat(c.Monto.toString()),
+      0
+    ),
+    montoPagado: cuotasFiltradas
+      .filter((c) => c.Estado === 1)
+      .reduce((sum, c) => sum + Number.parseFloat(c.Monto.toString()), 0),
+  };
+
+  // Paginación
+  const totalPaginas = Math.ceil(cuotasFiltradas.length / itemsPorPagina);
+  const indexInicio = (paginaActual - 1) * itemsPorPagina;
+  const indexFin = indexInicio + itemsPorPagina;
+  const cuotasPaginadas = cuotasFiltradas.slice(indexInicio, indexFin);
+
+  // Resetear a página 1 cuando cambian los filtros
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [searchTerm, mesSeleccionado, itemsPorPagina]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-AR", {
@@ -339,31 +408,110 @@ export default function GestionCuotasPage() {
             <CardTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5" />
               Resumen Financiero
+              {mesSeleccionado !== "todos" && (
+                <span className="text-base font-normal text-muted-foreground">
+                  - {mesSeleccionado}
+                </span>
+              )}
+              {searchTerm && (
+                <span className="text-base font-normal text-muted-foreground">
+                  - Búsqueda: "{searchTerm}"
+                </span>
+              )}
             </CardTitle>
+            <CardDescription>
+              {mesSeleccionado === "todos" && !searchTerm
+                ? "Resumen total de todas las cuotas"
+                : "Resumen de cuotas filtradas"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">
-                  {formatCurrency(estadisticas.montoTotal)}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Números */}
+              <div className="grid grid-cols-1 gap-6">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {formatCurrency(estadisticasFiltradas.montoTotal)}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    Monto Total Esperado
+                  </div>
                 </div>
-                <div className="text-sm text-gray-600">
-                  Monto Total Esperado
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    {formatCurrency(estadisticasFiltradas.montoPagado)}
+                  </div>
+                  <div className="text-sm text-gray-600">Monto Recaudado</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-orange-600">
+                    {formatCurrency(
+                      estadisticasFiltradas.montoTotal - estadisticasFiltradas.montoPagado
+                    )}
+                  </div>
+                  <div className="text-sm text-gray-600">Monto Pendiente</div>
                 </div>
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">
-                  {formatCurrency(estadisticas.montoPagado)}
+
+              {/* Gráfico */}
+              <div>
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart
+                    data={[
+                      {
+                        name: "Monto Recaudado",
+                        valor: estadisticasFiltradas.montoPagado,
+                        color: "#10b981",
+                      },
+                      {
+                        name: "Monto Pendiente",
+                        valor: estadisticasFiltradas.montoTotal - estadisticasFiltradas.montoPagado,
+                        color: "#f97316",
+                      },
+                    ]}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip
+                      formatter={(value: number) => formatCurrency(value)}
+                      contentStyle={{
+                        backgroundColor: "white",
+                        border: "1px solid #ccc",
+                        borderRadius: "8px",
+                      }}
+                    />
+                    <Bar dataKey="valor" name="Monto" radius={[8, 8, 0, 0]}>
+                      {[
+                        {
+                          name: "Monto Recaudado",
+                          valor: estadisticasFiltradas.montoPagado,
+                          color: "#10b981",
+                        },
+                        {
+                          name: "Monto Pendiente",
+                          valor: estadisticasFiltradas.montoTotal - estadisticasFiltradas.montoPagado,
+                          color: "#f97316",
+                        },
+                      ].map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="text-center mt-2">
+                  <p className="text-sm text-muted-foreground">
+                    Porcentaje cobrado:{" "}
+                    <span className="font-semibold text-green-600">
+                      {estadisticasFiltradas.montoTotal > 0
+                        ? Math.round(
+                            (estadisticasFiltradas.montoPagado / estadisticasFiltradas.montoTotal) * 100
+                          )
+                        : 0}
+                      %
+                    </span>
+                  </p>
                 </div>
-                <div className="text-sm text-gray-600">Monto Recaudado</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-orange-600">
-                  {formatCurrency(
-                    estadisticas.montoTotal - estadisticas.montoPagado
-                  )}
-                </div>
-                <div className="text-sm text-gray-600">Monto Pendiente</div>
               </div>
             </div>
           </CardContent>
@@ -372,23 +520,74 @@ export default function GestionCuotasPage() {
         {/* Tabla de Cuotas */}
         <Card>
           <CardHeader>
-            <div className="flex justify-between items-center">
-              <div>
-                <CardTitle>Cuotas Registradas</CardTitle>
-                <CardDescription>
-                  Lista de todas las cuotas del sistema
-                </CardDescription>
+            <div className="flex flex-col gap-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Cuotas Registradas</CardTitle>
+                  <CardDescription>
+                    {mesSeleccionado === "todos"
+                      ? "Lista de todas las cuotas del sistema"
+                      : `Cuotas del período ${mesSeleccionado}`}
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Buscar socio..."
+                    className="w-64"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  <Button variant="outline" size="icon">
+                    <Search className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Buscar socio o período..."
-                  className="w-64"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                <Button variant="outline" size="icon">
-                  <Search className="h-4 w-4" />
-                </Button>
+              
+              {/* Filtros y controles */}
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Período:</span>
+                  <Select value={mesSeleccionado} onValueChange={setMesSeleccionado}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Seleccionar período" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos los períodos</SelectItem>
+                      {mesesDisponibles.map((mes) => (
+                        <SelectItem key={mes} value={mes}>
+                          {mes}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Mostrar:</span>
+                  <Select 
+                    value={itemsPorPagina.toString()} 
+                    onValueChange={(value) => setItemsPorPagina(Number(value))}
+                  >
+                    <SelectTrigger className="w-[100px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span className="text-sm text-muted-foreground">por página</span>
+                </div>
+              </div>
+              
+              {/* Contador */}
+              <div className="text-sm text-muted-foreground">
+                Mostrando {indexInicio + 1}-{Math.min(indexFin, cuotasFiltradas.length)} de {cuotasFiltradas.length} cuotas
+                {cuotasFiltradas.length !== cuotas.length && (
+                  <span> (filtradas de {cuotas.length} totales)</span>
+                )}
               </div>
             </div>
           </CardHeader>
@@ -406,7 +605,7 @@ export default function GestionCuotasPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {cuotasFiltradas.length === 0 ? (
+                {cuotasPaginadas.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={7}
@@ -416,7 +615,7 @@ export default function GestionCuotasPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  cuotasFiltradas.map((cuota) => (
+                  cuotasPaginadas.map((cuota) => (
                     <TableRow key={cuota.IdCuota}>
                       <TableCell className="font-medium">
                         {cuota.NombreSocio}
@@ -452,6 +651,76 @@ export default function GestionCuotasPage() {
                 )}
               </TableBody>
             </Table>
+
+            {/* Paginación */}
+            {totalPaginas > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPaginaActual(1)}
+                  disabled={paginaActual === 1}
+                >
+                  Primera
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPaginaActual(paginaActual - 1)}
+                  disabled={paginaActual === 1}
+                >
+                  Anterior
+                </Button>
+                
+                <div className="flex gap-1">
+                  {Array.from({ length: totalPaginas }, (_, i) => i + 1)
+                    .filter((num) => {
+                      // Mostrar primera página, última página, página actual y páginas cercanas
+                      return (
+                        num === 1 ||
+                        num === totalPaginas ||
+                        (num >= paginaActual - 2 && num <= paginaActual + 2)
+                      );
+                    })
+                    .map((num, idx, arr) => {
+                      // Agregar "..." entre números no consecutivos
+                      const prevNum = arr[idx - 1];
+                      const showEllipsis = prevNum && num - prevNum > 1;
+                      
+                      return (
+                        <div key={num} className="flex items-center gap-1">
+                          {showEllipsis && <span className="px-2">...</span>}
+                          <Button
+                            variant={paginaActual === num ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setPaginaActual(num)}
+                            className="w-10"
+                          >
+                            {num}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPaginaActual(paginaActual + 1)}
+                  disabled={paginaActual === totalPaginas}
+                >
+                  Siguiente
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPaginaActual(totalPaginas)}
+                  disabled={paginaActual === totalPaginas}
+                >
+                  Última
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>
