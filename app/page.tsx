@@ -3,6 +3,7 @@
 import type React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -306,8 +307,15 @@ export default function LoginPage() {
         {/* Card principal */}
         <Card className="shadow-lg">
           <CardHeader className="text-center">
-            <div className="mx-auto w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mb-4">
-              <Users className="h-8 w-8 text-white" />
+            <div className="mx-auto mb-4 relative w-20 h-20">
+              <Image
+                src="/icons/android/android-launchericon-192-192.png"
+                alt="ClubMaster Logo"
+                width={80}
+                height={80}
+                className="rounded-2xl shadow-md"
+                priority
+              />
             </div>
             <CardTitle className="text-2xl font-bold text-gray-900">
               ClubMaster
