@@ -8,9 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { ArrowLeft, UserCheck, Save, Loader2, Star } from "lucide-react"
+import { ArrowLeft, UserCheck, Save, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
@@ -19,9 +18,8 @@ interface Arbitro {
   Nombre: string
   Email: string
   Telefono: string | null
-  Disponibilidad: string | null
-  Experiencia: string | null
-  Certificaciones: string | null
+  Estado: number
+  Tarifa: number | null
 }
 
 export default function EditarArbitroPage() {
@@ -67,7 +65,9 @@ export default function EditarArbitroPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(arbitro),
+        body: JSON.stringify({
+          Estado: arbitro.Estado,
+        }),
       })
 
       if (!response.ok) {
@@ -75,8 +75,8 @@ export default function EditarArbitroPage() {
       }
 
       toast({
-        title: "Árbitro actualizado",
-        description: "Los cambios se han guardado correctamente.",
+        title: "Estado actualizado",
+        description: "El estado del árbitro se ha actualizado correctamente.",
       })
 
       router.push("/arbitros")
@@ -180,11 +180,9 @@ export default function EditarArbitroPage() {
               </Avatar>
               <h3 className="text-xl font-semibold">{arbitro.Nombre}</h3>
               <p className="text-gray-600">{arbitro.Email}</p>
-              <div className="flex justify-center items-center gap-1 mt-2">
-                {Array.from({ length: 5 }, (_, i) => (
-                  <Star key={i} className={`h-4 w-4 ${i < 4 ? "text-yellow-500 fill-current" : "text-gray-300"}`} />
-                ))}
-                <span className="text-sm text-gray-600 ml-1">(4.2)</span>
+              <div className="mt-3">
+                <span className="text-sm text-gray-500">Estado:</span>
+                <p className="font-medium">{arbitro.Estado === 1 ? "Activo" : "Inactivo"}</p>
               </div>
             </CardContent>
           </Card>
@@ -203,8 +201,8 @@ export default function EditarArbitroPage() {
                     <Input
                       id="nombre"
                       value={arbitro.Nombre}
-                      onChange={(e) => handleInputChange("Nombre", e.target.value)}
-                      required
+                      disabled
+                      className="bg-gray-50"
                     />
                   </div>
 
@@ -214,8 +212,8 @@ export default function EditarArbitroPage() {
                       id="email"
                       type="email"
                       value={arbitro.Email}
-                      onChange={(e) => handleInputChange("Email", e.target.value)}
-                      required
+                      disabled
+                      className="bg-gray-50"
                     />
                   </div>
 
@@ -223,44 +221,36 @@ export default function EditarArbitroPage() {
                     <Label htmlFor="telefono">Teléfono</Label>
                     <Input
                       id="telefono"
-                      value={arbitro.Telefono || ""}
-                      onChange={(e) => handleInputChange("Telefono", e.target.value || null)}
-                      placeholder="Ej: +54 11 1234-5678"
+                      value={arbitro.Telefono || "N/A"}
+                      disabled
+                      className="bg-gray-50"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="disponibilidad">Disponibilidad</Label>
+                    <Label htmlFor="tarifa">Tarifa</Label>
                     <Input
-                      id="disponibilidad"
-                      value={arbitro.Disponibilidad || ""}
-                      onChange={(e) => handleInputChange("Disponibilidad", e.target.value || null)}
-                      placeholder="Ej: 2025-01-15,2025-01-16"
+                      id="tarifa"
+                      value={arbitro.Tarifa ? `$${arbitro.Tarifa.toLocaleString()}` : "Sin configurar"}
+                      disabled
+                      className="bg-gray-50"
                     />
-                    <p className="text-xs text-gray-500">Fechas separadas por comas (YYYY-MM-DD)</p>
+                    <p className="text-xs text-gray-500">Solo el árbitro puede modificar su tarifa</p>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="experiencia">Experiencia</Label>
-                  <Textarea
-                    id="experiencia"
-                    value={arbitro.Experiencia || ""}
-                    onChange={(e) => handleInputChange("Experiencia", e.target.value || null)}
-                    placeholder="Describe la experiencia del árbitro..."
-                    rows={3}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="certificaciones">Certificaciones</Label>
-                  <Textarea
-                    id="certificaciones"
-                    value={arbitro.Certificaciones || ""}
-                    onChange={(e) => handleInputChange("Certificaciones", e.target.value || null)}
-                    placeholder="Lista las certificaciones del árbitro..."
-                    rows={3}
-                  />
+                  <Label htmlFor="estado">Estado</Label>
+                  <select
+                    id="estado"
+                    value={arbitro.Estado}
+                    onChange={(e) => handleInputChange("Estado", Number(e.target.value))}
+                    className="w-full h-10 px-3 py-2 text-sm rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value={1}>Activo</option>
+                    <option value={0}>Inactivo</option>
+                  </select>
+                  <p className="text-xs text-gray-500">Árbitros inactivos no pueden ser asignados a partidos</p>
                 </div>
 
                 <div className="flex justify-end gap-4">

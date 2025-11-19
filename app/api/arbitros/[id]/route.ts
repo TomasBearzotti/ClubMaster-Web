@@ -14,11 +14,12 @@ export async function GET(
       .input("arbitroId", sql.Int, Number.parseInt(arbitroId)).query(`
         SELECT 
           a.IdArbitro,
-          p.Nombre,
-          p.Apellido,
-          p.Dni,
+          p.Nombre + ' ' + ISNULL(p.Apellido, '') as Nombre,
+          p.DNI,
           p.Mail as Email,
           p.Telefono,
+          a.Estado,
+          a.Tarifa,
           a.IdPersona
         FROM Arbitros a
         INNER JOIN Personas p ON a.IdPersona = p.IdPersona
@@ -32,19 +33,7 @@ export async function GET(
       );
     }
 
-    // Obtener disponibilidad
-    const disponibilidadResult = await pool
-      .request()
-      .input("arbitroId", sql.Int, Number.parseInt(arbitroId)).query(`
-        SELECT DiaSemana, HoraInicio, HoraFin
-        FROM DisponibilidadArbitro
-        WHERE IdArbitro = @arbitroId
-      `);
-
-    const arbitro = result.recordset[0];
-    arbitro.Disponibilidad = disponibilidadResult.recordset;
-
-    return NextResponse.json(arbitro);
+    return NextResponse.json(result.recordset[0]);
   } catch (error) {
     console.error("Error fetching arbitro:", error);
     return NextResponse.json(
@@ -63,13 +52,21 @@ export async function PUT(
     const arbitroId = params.id;
     const body = await request.json();
 
-    const { Nombre, Apellido, Dni, Email, Telefono, Disponibilidad } = body;
+    const { Estado } = body;
 
-    // Obtener el IdPersona del árbitro
+    // Validar que Estado sea 0 o 1
+    if (Estado !== 0 && Estado !== 1) {
+      return NextResponse.json(
+        { error: "Estado inválido. Debe ser 0 (Inactivo) o 1 (Activo)" },
+        { status: 400 }
+      );
+    }
+
+    // Verificar que el árbitro existe
     const arbitroResult = await pool
       .request()
       .input("arbitroId", sql.Int, Number.parseInt(arbitroId))
-      .query("SELECT IdPersona FROM Arbitros WHERE IdArbitro = @arbitroId");
+      .query("SELECT IdArbitro FROM Arbitros WHERE IdArbitro = @arbitroId");
 
     if (arbitroResult.recordset.length === 0) {
       return NextResponse.json(
@@ -78,50 +75,15 @@ export async function PUT(
       );
     }
 
-    const idPersona = arbitroResult.recordset[0].IdPersona;
-
-    // Actualizar la persona
+    // Actualizar solo el Estado del árbitro
     await pool
       .request()
-      .input("idPersona", sql.Int, idPersona)
-      .input("nombre", sql.NVarChar, Nombre)
-      .input("apellido", sql.NVarChar, Apellido)
-      .input("dni", sql.NVarChar, Dni)
-      .input("email", sql.NVarChar, Email)
-      .input("telefono", sql.NVarChar, Telefono).query(`
-        UPDATE Personas 
-        SET 
-          Nombre = @nombre,
-          Apellido = @apellido,
-          Dni = @dni,
-          Mail = @email,
-          Telefono = @telefono
-        WHERE IdPersona = @idPersona
+      .input("arbitroId", sql.Int, Number.parseInt(arbitroId))
+      .input("estado", sql.Int, Estado).query(`
+        UPDATE Arbitros
+        SET Estado = @estado
+        WHERE IdArbitro = @arbitroId
       `);
-
-    // Actualizar disponibilidad si se proporciona
-    if (Disponibilidad && Array.isArray(Disponibilidad)) {
-      // Eliminar disponibilidad existente
-      await pool
-        .request()
-        .input("arbitroId", sql.Int, Number.parseInt(arbitroId))
-        .query(
-          "DELETE FROM DisponibilidadArbitro WHERE IdArbitro = @arbitroId"
-        );
-
-      // Insertar nueva disponibilidad
-      for (const disp of Disponibilidad) {
-        await pool
-          .request()
-          .input("arbitroId", sql.Int, Number.parseInt(arbitroId))
-          .input("diaSemana", sql.NVarChar, disp.DiaSemana)
-          .input("horaInicio", sql.Time, disp.HoraInicio)
-          .input("horaFin", sql.Time, disp.HoraFin).query(`
-            INSERT INTO DisponibilidadArbitro (IdArbitro, DiaSemana, HoraInicio, HoraFin)
-            VALUES (@arbitroId, @diaSemana, @horaInicio, @horaFin)
-          `);
-      }
-    }
 
     return NextResponse.json({ message: "Árbitro actualizado correctamente" });
   } catch (error) {

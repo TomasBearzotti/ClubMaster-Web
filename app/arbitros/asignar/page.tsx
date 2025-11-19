@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { ArrowLeft, UserCheck, Calendar, Trophy, CheckCircle, Star, Clock, User, Info, Loader2 } from "lucide-react"
+import { ArrowLeft, UserCheck, Calendar, Trophy, CheckCircle, User, Info, Loader2 } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 
@@ -29,6 +29,9 @@ interface Torneo {
   FechaInicio: string
   Estado: number // 0: Pendiente, 1: Activo, 2: Finalizado
   Participantes: number
+  DeporteId: number
+  IdDeporte?: number // API might return IdDeporte instead
+  NombreDeporte?: string
 }
 
 interface Partido {
@@ -50,9 +53,10 @@ interface Arbitro {
   Nombre: string
   Email: string
   Telefono: string
-  Disponibilidad: string // e.g., "2025-01-15,2025-01-16"
-  // Calificacion is not in DB schema, using a placeholder for display
-  Calificacion: number
+  Estado: number
+  Tarifa: number | null
+  Deportes?: string
+  DeportesIds?: number[]
 }
 
 export default function AsignarArbitroPage() {
@@ -101,14 +105,8 @@ export default function AsignarArbitroPage() {
         const torneosData: Torneo[] = await torneosRes.json()
         const arbitrosData: Arbitro[] = await arbitrosRes.json()
 
-        // Add placeholder for Calificacion as it's not in DB schema
-        const arbitrosWithRating = arbitrosData.map((a) => ({
-          ...a,
-          Calificacion: Math.floor(Math.random() * 20) / 10 + 3, // Random rating between 3.0 and 4.9
-        }))
-
         setTorneos(torneosData)
-        setArbitros(arbitrosWithRating)
+        setArbitros(arbitrosData)
       } catch (error: any) {
         console.error("Error fetching initial data:", error)
         setErrorData(`Error al cargar datos iniciales: ${error.message}`)
@@ -130,15 +128,13 @@ export default function AsignarArbitroPage() {
   const selectedTorneo = torneos.find((t) => t.IdTorneo.toString() === selectedTorneoId)
 
   const getArbitrosDisponibles = () => {
-    if (!selectedPartido || !selectedTorneo) return []
-
-    // Filter by availability string (e.g., "2025-01-15,2025-01-16")
-    // Ensure selectedPartido.FechaPartido is a string in "YYYY-MM-DD" format
-    const partidoDate = format(new Date(selectedPartido.FechaPartido), "yyyy-MM-dd")
-
-    return arbitros.filter(
-      (arbitro) => arbitro.Disponibilidad && arbitro.Disponibilidad.split(",").includes(partidoDate),
-    )
+    // Retorna árbitros activos con tarifa configurada y que puedan arbitrar el deporte del torneo
+    const deporteIdTorneo = selectedTorneo?.DeporteId || selectedTorneo?.IdDeporte
+    return arbitros.filter((arbitro) => {
+      const cumpleEstadoYTarifa = arbitro.Estado === 1 && arbitro.Tarifa && arbitro.Tarifa > 0
+      const cumpleDeporte = deporteIdTorneo ? (arbitro.DeportesIds?.includes(deporteIdTorneo) ?? false) : true
+      return cumpleEstadoYTarifa && cumpleDeporte
+    })
   }
 
   const getEstadoPartidoBadge = (estado: string) => {
@@ -184,13 +180,12 @@ export default function AsignarArbitroPage() {
     const arbitroIdToAssign = selectedArbitroId ? Number.parseInt(selectedArbitroId) : null
 
     try {
-      const response = await fetch("/api/partidos", {
+      const response = await fetch(`/api/partidos/${selectedPartido.IdPartido}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          id: selectedPartido.IdPartido,
           arbitroId: arbitroIdToAssign,
         }),
       })
@@ -225,15 +220,6 @@ export default function AsignarArbitroPage() {
 
   const handleVolver = () => {
     router.push("/arbitros")
-  }
-
-  const renderStars = (rating: number) => {
-    return Array.from({ length: 5 }, (_, i) => (
-      <Star
-        key={i}
-        className={`h-4 w-4 ${i < Math.floor(rating) ? "text-yellow-500 fill-current" : "text-gray-300"}`}
-      />
-    ))
   }
 
   if (loadingData) {
@@ -504,27 +490,9 @@ export default function AsignarArbitroPage() {
                         </Avatar>
                         <div>
                           <h4 className="font-semibold">{arbitro.Nombre}</h4>
-                          <div className="flex items-center gap-1">
-                            {renderStars(arbitro.Calificacion)}
-                            <span className="text-sm text-gray-600 ml-1">({arbitro.Calificacion.toFixed(1)})</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <div className="flex items-center gap-1 mb-1">
-                            <Trophy className="h-4 w-4 text-purple-600" />
-                            <span className="font-medium">Deportes:</span>
-                          </div>
-                          <div className="text-gray-600">N/A (No disponible en la BD actual)</div>
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-1 mb-1">
-                            <Clock className="h-4 w-4 text-purple-600" />
-                            <span className="font-medium">Disponibilidad:</span>
-                          </div>
-                          <div className="text-gray-600">{arbitro.Disponibilidad || "No especificada"}</div>
+                          <p className="text-sm text-gray-600">
+                            Tarifa: <span className="font-medium text-purple-700">${arbitro.Tarifa?.toLocaleString()}</span>
+                          </p>
                         </div>
                       </div>
 
@@ -543,8 +511,7 @@ export default function AsignarArbitroPage() {
             {getArbitrosDisponibles().length === 0 && selectedPartido && (
               <Alert>
                 <AlertDescription>
-                  No hay árbitros disponibles para la fecha del partido seleccionado. Verifica la disponibilidad de los
-                  árbitros.
+                  No hay árbitros activos con tarifa configurada. Configura árbitros antes de asignar.
                 </AlertDescription>
               </Alert>
             )}

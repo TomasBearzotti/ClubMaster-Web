@@ -12,21 +12,37 @@ export async function GET(request: NextRequest) {
     let query = `
   SELECT 
     p.IdPartido,
-    p.TorneoId,
+    p.TorneoId AS IdTorneo,
     t.Nombre as TorneoNombre,
     p.ParticipanteAId,
     p.ParticipanteBId,
-    pa.Nombre as ParticipanteA,
-    pb.Nombre as ParticipanteB,
-    p.FechaHora,
+    pa.Nombre as EquipoA,
+    pb.Nombre as EquipoB,
+    CAST(p.FechaHora AS DATE) as FechaPartido,
+    FORMAT(p.FechaHora, 'HH:mm') as HoraPartido,
     p.Lugar,
-    p.Estado,
+    CASE 
+      WHEN p.Estado = 0 THEN 'programado'
+      WHEN p.Estado = 1 THEN 'en_curso'
+      WHEN p.Estado = 2 THEN 'finalizado'
+      ELSE 'programado'
+    END as EstadoPartido,
     p.FixtureIdFixture,
-    f.Nombre as FixtureNombre,
+    f.Nombre as Fase,
     f.NumeroRonda,
     f.Grupo,
     p.GanadorId,
     p.EsEmpate,
+    p.ArbitroId,
+    CASE 
+      WHEN p.ArbitroId IS NOT NULL THEN (
+        SELECT per.Nombre + ' ' + ISNULL(per.Apellido, '')
+        FROM Arbitros a
+        INNER JOIN Personas per ON a.IdPersona = per.IdPersona
+        WHERE a.IdArbitro = p.ArbitroId
+      )
+      ELSE NULL
+    END as ArbitroNombre,
     CASE 
       WHEN p.GanadorId IS NOT NULL OR p.EsEmpate = 1 THEN 1
       ELSE 0

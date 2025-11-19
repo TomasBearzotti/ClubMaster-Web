@@ -8,26 +8,51 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { ArrowLeft, UserCheck, Plus, Search, Star, Calendar, Info, Loader2 } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { ArrowLeft, UserCheck, Plus, Search, Calendar, Info, Loader2, ChevronDown, ChevronUp } from "lucide-react"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { useToast } from "@/hooks/use-toast"
 
 interface Arbitro {
   IdArbitro: number
   Nombre: string
   Email: string
   Telefono: string
-  Disponibilidad: string // e.g., "2025-01-15,2025-01-16"
-  PartidosAsignados: number
-  // Calificacion is not in DB schema, using a placeholder for display
-  Calificacion: number
+  Estado: number
+  Tarifa: number | null
+  Deportes?: string
+  DeportesIds?: number[]
+}
+
+interface Disponibilidad {
+  IdDisponibilidad: number
+  IdArbitro: number
+  DiaSemana: string
+  HoraInicio: string
+  HoraFin: string
 }
 
 export default function GestionArbitrosPage() {
   const router = useRouter()
+  const { toast } = useToast()
   const [arbitros, setArbitros] = useState<Arbitro[]>([])
+  const [disponibilidades, setDisponibilidades] = useState<Record<number, Disponibilidad[]>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
+  const [updatingEstado, setUpdatingEstado] = useState<number | null>(null)
+  const [expandedArbitro, setExpandedArbitro] = useState<number | null>(null)
+
+  const diasSemana = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"]
+  const diasSemanaDisplay: Record<string, string> = {
+    "Lunes": "Lun",
+    "Martes": "Mar",
+    "Miercoles": "Mié",
+    "Jueves": "Jue",
+    "Viernes": "Vie",
+    "Sabado": "Sáb",
+    "Domingo": "Dom"
+  }
 
   useEffect(() => {
     const fetchArbitros = async () => {
@@ -39,12 +64,22 @@ export default function GestionArbitrosPage() {
           throw new Error(`HTTP error! status: ${response.status}`)
         }
         const data: Arbitro[] = await response.json()
-        // Add placeholder for Calificacion as it's not in DB schema
-        const arbitrosWithRating = data.map((a) => ({
-          ...a,
-          Calificacion: Math.floor(Math.random() * 20) / 10 + 3, // Random rating between 3.0 and 4.9
-        }))
-        setArbitros(arbitrosWithRating)
+        setArbitros(data)
+        
+        // Fetch disponibilidades para cada árbitro
+        const dispResponse = await fetch("/api/arbitros/disponibilidad")
+        if (dispResponse.ok) {
+          const dispData: Disponibilidad[] = await dispResponse.json()
+          // Agrupar por IdArbitro
+          const dispByArbitro: Record<number, Disponibilidad[]> = {}
+          dispData.forEach((disp) => {
+            if (!dispByArbitro[disp.IdArbitro]) {
+              dispByArbitro[disp.IdArbitro] = []
+            }
+            dispByArbitro[disp.IdArbitro].push(disp)
+          })
+          setDisponibilidades(dispByArbitro)
+        }
       } catch (error: any) {
         console.error("Error fetching arbitros:", error)
         setError(`Error al cargar árbitros: ${error.message}`)
@@ -55,22 +90,11 @@ export default function GestionArbitrosPage() {
     fetchArbitros()
   }, [])
 
-  const getEstadoBadge = (disponibilidad: string | null) => {
-    if (!disponibilidad) {
-      return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">No Disponible</Badge>
+  const getEstadoBadge = (estado: number) => {
+    if (estado === 1) {
+      return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Activo</Badge>
     }
-    // Simple check: if availability string is not empty, assume available
-    // A more robust solution would check current date against availability dates
-    return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Disponible</Badge>
-  }
-
-  const renderStars = (rating: number) => {
-    return Array.from({ length: 5 }, (_, i) => (
-      <Star
-        key={i}
-        className={`h-4 w-4 ${i < Math.floor(rating) ? "text-yellow-500 fill-current" : "text-gray-300"}`}
-      />
-    ))
+    return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Inactivo</Badge>
   }
 
   const handleVolver = () => {
@@ -81,6 +105,45 @@ export default function GestionArbitrosPage() {
     router.push("/arbitros/asignar")
   }
 
+  const handleToggleEstado = async (arbitro: Arbitro) => {
+    const nuevoEstado = arbitro.Estado === 1 ? 0 : 1
+    setUpdatingEstado(arbitro.IdArbitro)
+
+    try {
+      const response = await fetch(`/api/arbitros/${arbitro.IdArbitro}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          Estado: nuevoEstado,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Error al actualizar estado")
+      }
+
+      // Actualizar localmente
+      setArbitros((prev) =>
+        prev.map((a) => (a.IdArbitro === arbitro.IdArbitro ? { ...a, Estado: nuevoEstado } : a))
+      )
+
+      toast({
+        title: "Estado actualizado",
+        description: `Árbitro marcado como ${nuevoEstado === 1 ? "Activo" : "Inactivo"}`,
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar el estado del árbitro",
+        variant: "destructive",
+      })
+    } finally {
+      setUpdatingEstado(null)
+    }
+  }
+
   const filteredArbitros = arbitros.filter(
     (arbitro) =>
       arbitro.Nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -89,10 +152,8 @@ export default function GestionArbitrosPage() {
 
   // Calculate statistics
   const totalArbitros = arbitros.length
-  const arbitrosDisponibles = arbitros.filter((a) => a.Disponibilidad).length
-  const totalPartidosAsignados = arbitros.reduce((sum, a) => sum + a.PartidosAsignados, 0)
-  const promedioCalificacion =
-    arbitros.length > 0 ? (arbitros.reduce((sum, a) => sum + a.Calificacion, 0) / arbitros.length).toFixed(1) : "N/A"
+  const arbitrosActivos = arbitros.filter((a) => a.Estado === 1).length
+  const arbitrosConTarifa = arbitros.filter((a) => a.Tarifa && a.Tarifa > 0).length
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100">
@@ -136,34 +197,34 @@ export default function GestionArbitrosPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Disponibles</CardTitle>
-              <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-xs">Activos</Badge>
+              <CardTitle className="text-sm font-medium">Activos</CardTitle>
+              <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-xs">Disponibles</Badge>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{arbitrosDisponibles}</div>
-              <p className="text-xs text-muted-foreground">Listos para asignar</p>
+              <div className="text-2xl font-bold text-green-600">{arbitrosActivos}</div>
+              <p className="text-xs text-muted-foreground">Árbitros activos</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Partidos Asignados</CardTitle>
+              <CardTitle className="text-sm font-medium">Con Tarifa</CardTitle>
               <Calendar className="h-4 w-4 text-blue-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{totalPartidosAsignados}</div>
-              <p className="text-xs text-muted-foreground">En total</p>
+              <div className="text-2xl font-bold text-blue-600">{arbitrosConTarifa}</div>
+              <p className="text-xs text-muted-foreground">Tarifa configurada</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Calificación Promedio</CardTitle>
-              <Star className="h-4 w-4 text-yellow-600" />
+              <CardTitle className="text-sm font-medium">Inactivos</CardTitle>
+              <UserCheck className="h-4 w-4 text-red-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">{promedioCalificacion}</div>
-              <p className="text-xs text-muted-foreground">De 5 estrellas</p>
+              <div className="text-2xl font-bold text-red-600">{totalArbitros - arbitrosActivos}</div>
+              <p className="text-xs text-muted-foreground">No disponibles</p>
             </CardContent>
           </Card>
         </div>
@@ -183,9 +244,12 @@ export default function GestionArbitrosPage() {
             Asignar a Partidos
           </Button>
 
-          <Button variant="outline" className="h-12 flex items-center gap-2 bg-transparent">
+          <Button
+            onClick={() => router.push("/arbitros/facturacion")}
+            className="bg-green-600 hover:bg-green-700 h-12 flex items-center gap-2"
+          >
             <Calendar className="h-5 w-5" />
-            Ver Disponibilidad
+            Facturación
           </Button>
         </div>
 
@@ -225,76 +289,151 @@ export default function GestionArbitrosPage() {
             ) : filteredArbitros.length === 0 ? (
               <div className="text-center py-8 text-gray-600">No se encontraron árbitros.</div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Árbitro</TableHead>
-                    <TableHead>Contacto</TableHead>
-                    <TableHead>Disponibilidad</TableHead>
-                    <TableHead>Calificación</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-center">Partidos Asignados</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredArbitros.map((arbitro) => (
-                    <TableRow key={arbitro.IdArbitro}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback>
-                              {arbitro.Nombre.split(" ")
-                                .map((n) => n[0])
-                                .join("")}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="font-medium">{arbitro.Nombre}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-600">
-                        {arbitro.Email}
-                        <br />
-                        {arbitro.Telefono || "N/A"}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {arbitro.Disponibilidad ? (
-                            arbitro.Disponibilidad.split(",").map((disp, index) => (
-                              <Badge key={index} variant="outline" className="text-xs">
-                                {disp.trim()}
-                              </Badge>
-                            ))
-                          ) : (
-                            <Badge variant="outline" className="text-xs text-gray-500">
-                              No especificada
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          {renderStars(arbitro.Calificacion)}
-                          <span className="text-sm text-gray-600 ml-1">({arbitro.Calificacion.toFixed(1)})</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{getEstadoBadge(arbitro.Disponibilidad)}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline">{arbitro.PartidosAsignados}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => router.push(`/arbitros/editar/${arbitro.IdArbitro}`)}
-                        >
-                          Editar
-                        </Button>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50px]"></TableHead>
+                      <TableHead className="min-w-[200px]">Árbitro</TableHead>
+                      <TableHead className="min-w-[250px]">Email</TableHead>
+                      <TableHead className="min-w-[180px]">Deportes</TableHead>
+                      <TableHead className="min-w-[120px]">Tarifa</TableHead>
+                      <TableHead className="min-w-[100px]">Estado</TableHead>
+                      <TableHead className="min-w-[150px] text-right">Acciones</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredArbitros.map((arbitro) => {
+                      const disponibilidad = disponibilidades[arbitro.IdArbitro] || []
+                      const isExpanded = expandedArbitro === arbitro.IdArbitro
+                      
+                      return (
+                        <>
+                          <TableRow key={`${arbitro.IdArbitro}-row`}>
+                            <TableCell className="w-[50px]">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="p-0 h-8 w-8"
+                                onClick={() => setExpandedArbitro(isExpanded ? null : arbitro.IdArbitro)}
+                              >
+                                {isExpanded ? (
+                                  <ChevronUp className="h-4 w-4" />
+                                ) : (
+                                  <ChevronDown className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </TableCell>
+                            <TableCell className="min-w-[200px]">
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarFallback>
+                                    {arbitro.Nombre.split(" ")
+                                      .map((n) => n[0])
+                                      .join("")}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="font-medium">{arbitro.Nombre}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="min-w-[250px] text-sm text-gray-600">
+                              {arbitro.Email}
+                            </TableCell>
+                            <TableCell className="min-w-[180px]">
+                              <div className="flex flex-wrap gap-1">
+                                {arbitro.Deportes ? (
+                                  arbitro.Deportes.split(', ').map((deporte, idx) => (
+                                    <Badge key={idx} variant="outline" className="text-xs">
+                                      {deporte}
+                                    </Badge>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-gray-400">Sin deportes</span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="min-w-[120px]">
+                              <span className="text-sm font-medium">
+                                {arbitro.Tarifa ? `$${arbitro.Tarifa.toLocaleString()}` : "Sin configurar"}
+                              </span>
+                            </TableCell>
+                            <TableCell className="min-w-[100px]">{getEstadoBadge(arbitro.Estado)}</TableCell>
+                            <TableCell className="min-w-[150px] text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <span className="text-sm text-gray-600">
+                                  {arbitro.Estado === 1 ? "Activo" : "Inactivo"}
+                                </span>
+                                <Switch
+                                  checked={arbitro.Estado === 1}
+                                  onCheckedChange={() => handleToggleEstado(arbitro)}
+                                  disabled={updatingEstado === arbitro.IdArbitro}
+                                />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                          {isExpanded && (
+                            <TableRow key={`${arbitro.IdArbitro}-expanded`}>
+                              <TableCell colSpan={6} className="p-0">
+                                <div className="px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100 border-t border-gray-200">
+                                  <div>
+                                    <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                      <Calendar className="h-4 w-4 text-purple-600" />
+                                      Disponibilidad Horaria
+                                    </h4>
+                                    {disponibilidad.length > 0 ? (
+                                      <div className="space-y-3">
+                                        <p className="text-sm text-gray-600">
+                                          Disponible: <span className="font-medium">{disponibilidad.map((d: Disponibilidad) => diasSemanaDisplay[d.DiaSemana] || d.DiaSemana).join(", ")}</span>
+                                        </p>
+                                        <div className="grid grid-cols-7 gap-3">
+                                          {diasSemana.map((dia) => {
+                                            const diaDisponible = disponibilidad.find((d: Disponibilidad) => d.DiaSemana === dia)
+                                            return (
+                                              <div
+                                                key={dia}
+                                                className={`p-3 rounded-md border text-center transition-colors ${
+                                                  diaDisponible
+                                                    ? "bg-green-50 border-green-300"
+                                                    : "bg-gray-50 border-gray-200"
+                                                }`}
+                                              >
+                                                <div className={`text-xs font-bold mb-2 ${
+                                                  diaDisponible ? "text-green-700" : "text-gray-400"
+                                                }`}>
+                                                  {diasSemanaDisplay[dia]}
+                                                </div>
+                                                {diaDisponible ? (
+                                                  <div className="text-sm text-green-800 font-bold leading-snug">
+                                                    <div>{diaDisponible.HoraInicio}</div>
+                                                    <div className="text-xs text-gray-600 my-0.5">a</div>
+                                                    <div>{diaDisponible.HoraFin}</div>
+                                                  </div>
+                                                ) : (
+                                                  <div className="text-xs text-gray-400 mt-1">
+                                                    No disp.
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )
+                                          })}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-sm text-gray-500 italic">
+                                        No hay disponibilidad horaria configurada
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>

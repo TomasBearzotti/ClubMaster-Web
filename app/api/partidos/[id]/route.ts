@@ -131,7 +131,7 @@ export async function PUT(
     const partidoResult = await pool
       .request()
       .input("partidoId", sql.Int, Number.parseInt(partidoId)).query(`
-        SELECT p.IdPartido, t.FechaInicio, t.FechaFin
+        SELECT p.IdPartido, t.FechaInicio, t.FechaFin, t.IdDeporte
         FROM Partidos p
         INNER JOIN Torneos t ON p.TorneoId = t.IdTorneo
         WHERE p.IdPartido = @partidoId
@@ -145,6 +145,25 @@ export async function PUT(
     }
 
     const partido = partidoResult.recordset[0];
+
+    // Validar que el árbitro está registrado para el deporte del torneo
+    if (arbitroId) {
+      const arbitroDeporteValidation = await pool
+        .request()
+        .input("arbitroId", sql.Int, arbitroId)
+        .input("deporteId", sql.Int, partido.IdDeporte).query(`
+          SELECT ArbitroId 
+          FROM ArbitroDeportes 
+          WHERE ArbitroId = @arbitroId AND DeporteId = @deporteId
+        `);
+
+      if (arbitroDeporteValidation.recordset.length === 0) {
+        return NextResponse.json(
+          { error: "El árbitro no está registrado para arbitrar este deporte" },
+          { status: 400 }
+        );
+      }
+    }
 
     // Validar fechas si se proporciona fechaHora
     if (fechaHora) {
@@ -187,6 +206,14 @@ export async function PUT(
       horaPartido = fecha.toTimeString().split(" ")[0].substring(0, 5); // HH:MM format
     }
 
+    // Obtener árbitro anterior si existe
+    const arbitroAnteriorResult = await pool
+      .request()
+      .input("partidoId", sql.Int, Number.parseInt(partidoId))
+      .query(`SELECT ArbitroId FROM Partidos WHERE IdPartido = @partidoId`);
+
+    const arbitroAnterior = arbitroAnteriorResult.recordset[0]?.ArbitroId;
+
     // Actualizar el partido
     await pool
       .request()
@@ -203,6 +230,60 @@ export async function PUT(
           ArbitroId = @arbitroId
         WHERE IdPartido = @partidoId
       `);
+
+    // Si se asignó un nuevo árbitro (y no tenía uno antes, o cambió)
+    if (arbitroId && arbitroId !== arbitroAnterior) {
+      // Obtener la tarifa del árbitro
+      const tarifaResult = await pool
+        .request()
+        .input("arbitroId", sql.Int, arbitroId)
+        .query(`SELECT Tarifa FROM Arbitros WHERE IdArbitro = @arbitroId`);
+
+      const tarifa = tarifaResult.recordset[0]?.Tarifa || 0;
+
+      // Verificar si ya existe una factura para este partido
+      const facturaExistente = await pool
+        .request()
+        .input("partidoId", sql.Int, Number.parseInt(partidoId))
+        .query(`SELECT IdFactura FROM FacturacionArbitros WHERE IdPartido = @partidoId`);
+
+      if (facturaExistente.recordset.length > 0) {
+        // Si existe, actualizarla con el nuevo árbitro y monto
+        await pool
+          .request()
+          .input("partidoId", sql.Int, Number.parseInt(partidoId))
+          .input("arbitroId", sql.Int, arbitroId)
+          .input("monto", sql.Decimal(10, 2), tarifa)
+          .query(`
+            UPDATE FacturacionArbitros 
+            SET IdArbitro = @arbitroId, Monto = @monto
+            WHERE IdPartido = @partidoId
+          `);
+      } else {
+        // Si no existe, crear una nueva factura en estado Programada (0)
+        await pool
+          .request()
+          .input("arbitroId", sql.Int, arbitroId)
+          .input("partidoId", sql.Int, Number.parseInt(partidoId))
+          .input("monto", sql.Decimal(10, 2), tarifa)
+          .query(`
+            INSERT INTO FacturacionArbitros (IdArbitro, IdPartido, Monto, Estado, FechaCreacion)
+            VALUES (@arbitroId, @partidoId, @monto, 0, GETDATE())
+          `);
+      }
+    }
+
+    // Si se removió el árbitro, cancelar la factura si existe
+    if (!arbitroId && arbitroAnterior) {
+      await pool
+        .request()
+        .input("partidoId", sql.Int, Number.parseInt(partidoId))
+        .query(`
+          UPDATE FacturacionArbitros 
+          SET Estado = 3 
+          WHERE IdPartido = @partidoId AND Estado IN (0, 1)
+        `);
+    }
 
     return NextResponse.json({
       success: true,

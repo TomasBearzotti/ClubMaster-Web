@@ -7,23 +7,35 @@ export async function GET() {
     const result = await pool.request().query(`
       SELECT 
         a.IdArbitro,
-        p.Nombre,
-        p.Apellido,
+        p.Nombre + ' ' + ISNULL(p.Apellido, '') as Nombre,
         p.Mail as Email,
         p.Telefono,
-        da.DiaSemana,
-        da.HoraInicio,
-        da.HoraFin,
-        COUNT(pa.IdPartido) as PartidosAsignados
+        a.Estado,
+        a.Tarifa,
+        (
+          SELECT STRING_AGG(d.Nombre, ', ') 
+          FROM ArbitroDeportes ad
+          INNER JOIN Deportes d ON d.IdDeporte = ad.DeporteId
+          WHERE ad.ArbitroId = a.IdArbitro
+        ) as Deportes,
+        (
+          SELECT ad.DeporteId
+          FROM ArbitroDeportes ad
+          WHERE ad.ArbitroId = a.IdArbitro
+          FOR JSON PATH
+        ) as DeportesIds
       FROM Arbitros a
       INNER JOIN Personas p ON a.IdPersona = p.IdPersona
-      LEFT JOIN DisponibilidadArbitro da ON a.IdArbitro = da.IdArbitro
-      LEFT JOIN Partidos pa ON a.IdArbitro = pa.ArbitroId
-      GROUP BY a.IdArbitro, p.Nombre, p.Apellido, p.Mail, p.Telefono, da.DiaSemana, da.HoraInicio, da.HoraFin
       ORDER BY p.Nombre, p.Apellido
     `);
 
-    return NextResponse.json(result.recordset);
+    // Parsear DeportesIds de JSON a array
+    const arbitros = result.recordset.map((arbitro: any) => ({
+      ...arbitro,
+      DeportesIds: arbitro.DeportesIds ? JSON.parse(arbitro.DeportesIds).map((d: any) => d.DeporteId) : []
+    }));
+
+    return NextResponse.json(arbitros);
   } catch (error) {
     console.error("Error fetching arbitros:", error);
     return NextResponse.json(
@@ -53,7 +65,7 @@ export async function POST(request: NextRequest) {
       .input("dni", sql.NVarChar, dni)
       .input("email", sql.NVarChar, email)
       .query(
-        "SELECT COUNT(*) as count FROM Personas WHERE Dni = @dni OR Mail = @email"
+        "SELECT COUNT(*) as count FROM Personas WHERE DNI = @dni OR Mail = @email"
       );
 
     if (existingCheck.recordset[0].count > 0) {
@@ -67,42 +79,27 @@ export async function POST(request: NextRequest) {
     const personaResult = await pool
       .request()
       .input("nombre", sql.NVarChar, nombre)
-      .input("apellido", sql.NVarChar, apellido)
+      .input("apellido", sql.NVarChar, apellido || null)
       .input("dni", sql.NVarChar, dni)
-      .input("mail", sql.NVarChar, email)
+      .input("email", sql.NVarChar, email)
       .input("telefono", sql.NVarChar, telefono || null).query(`
-        INSERT INTO Personas (Nombre, Apellido, Dni, Mail, Telefono)
+        INSERT INTO Personas (Nombre, Apellido, DNI, Mail, Telefono, FechaRegistro)
         OUTPUT INSERTED.IdPersona
-        VALUES (@nombre, @apellido, @dni, @mail, @telefono)
+        VALUES (@nombre, @apellido, @dni, @email, @telefono, GETDATE())
       `);
 
     const personaId = personaResult.recordset[0].IdPersona;
 
-    // Crear el árbitro
+    // Crear el árbitro (Estado = 1 Activo por defecto, Tarifa = NULL)
     const arbitroResult = await pool
       .request()
       .input("idPersona", sql.Int, personaId).query(`
-        INSERT INTO Arbitros (IdPersona)
+        INSERT INTO Arbitros (IdPersona, Estado, Tarifa)
         OUTPUT INSERTED.IdArbitro
-        VALUES (@idPersona)
+        VALUES (@idPersona, 1, NULL)
       `);
 
     const arbitroId = arbitroResult.recordset[0].IdArbitro;
-
-    // Si hay disponibilidad, agregarla
-    if (disponibilidad && Array.isArray(disponibilidad)) {
-      for (const disp of disponibilidad) {
-        await pool
-          .request()
-          .input("idArbitro", sql.Int, arbitroId)
-          .input("diaSemana", sql.NVarChar, disp.diaSemana)
-          .input("horaInicio", sql.Time, disp.horaInicio)
-          .input("horaFin", sql.Time, disp.horaFin).query(`
-            INSERT INTO DisponibilidadArbitro (IdArbitro, DiaSemana, HoraInicio, HoraFin)
-            VALUES (@idArbitro, @diaSemana, @horaInicio, @horaFin)
-          `);
-      }
-    }
 
     return NextResponse.json({
       success: true,
