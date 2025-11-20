@@ -7,7 +7,6 @@ export async function GET(
 ) {
   try {
     const torneoId = Number.parseInt(params.id);
-
     const pool = await getConnection();
 
     const torneoResult = await pool
@@ -20,24 +19,15 @@ export async function GET(
           d.Nombre AS NombreDeporte,
           t.FechaInicio,
           t.Estado,
-          t.Descripcion,
-          t.MaxParticipantes,
+          ISNULL(t.Descripcion, '') as Descripcion,
+          ISNULL(t.MaxParticipantes, 0) as MaxParticipantes,
           t.FechaFin,
-          t.PremioGanador,
-          COALESCE(f.Tipo, t.TipoTorneo, 0) AS TipoTorneo,
-          COUNT(p.IdParticipante) as Participantes
+          ISNULL(t.PremioGanador, '') as PremioGanador,
+          ISNULL(t.TipoTorneo, 0) AS TipoTorneo,
+          (SELECT COUNT(*) FROM Participantes WHERE TorneoId = t.IdTorneo) as Participantes
         FROM Torneos t
         INNER JOIN Deportes d ON t.IdDeporte = d.IdDeporte
-        LEFT JOIN Participantes p ON t.IdTorneo = p.TorneoId
-        LEFT JOIN (
-          SELECT TorneoId, MIN(Tipo) as Tipo
-          FROM Fixtures
-          GROUP BY TorneoId
-        ) f ON t.IdTorneo = f.TorneoId
         WHERE t.IdTorneo = @torneoId
-        GROUP BY t.IdTorneo, t.Nombre, t.IdDeporte, d.Nombre, 
-         t.FechaInicio, t.Estado, t.Descripcion, t.MaxParticipantes, 
-         t.FechaFin, t.PremioGanador, f.Tipo, t.TipoTorneo
       `);
 
     if (torneoResult.recordset.length === 0) {

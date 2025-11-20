@@ -20,7 +20,18 @@ export async function GET(
           p.Telefono,
           a.Estado,
           a.Tarifa,
-          a.IdPersona
+          a.IdPersona,
+          (
+            SELECT STRING_AGG(d.Nombre, ', ')
+            FROM ArbitroDeportes ad
+            INNER JOIN Deportes d ON ad.DeporteId = d.IdDeporte
+            WHERE ad.ArbitroId = a.IdArbitro
+          ) as Deportes,
+          (
+            SELECT '[' + STRING_AGG(CAST(ad.DeporteId AS NVARCHAR), ',') + ']'
+            FROM ArbitroDeportes ad
+            WHERE ad.ArbitroId = a.IdArbitro
+          ) as DeportesIdsJson
         FROM Arbitros a
         INNER JOIN Personas p ON a.IdPersona = p.IdPersona
         WHERE a.IdArbitro = @arbitroId
@@ -33,7 +44,21 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(result.recordset[0]);
+    const arbitro = result.recordset[0];
+    
+    // Parsear DeportesIds desde JSON
+    if (arbitro.DeportesIdsJson) {
+      try {
+        arbitro.DeportesIds = JSON.parse(arbitro.DeportesIdsJson);
+      } catch {
+        arbitro.DeportesIds = [];
+      }
+      delete arbitro.DeportesIdsJson;
+    } else {
+      arbitro.DeportesIds = [];
+    }
+
+    return NextResponse.json(arbitro);
   } catch (error) {
     console.error("Error fetching arbitro:", error);
     return NextResponse.json(
@@ -52,15 +77,7 @@ export async function PUT(
     const arbitroId = params.id;
     const body = await request.json();
 
-    const { Estado } = body;
-
-    // Validar que Estado sea 0 o 1
-    if (Estado !== 0 && Estado !== 1) {
-      return NextResponse.json(
-        { error: "Estado inválido. Debe ser 0 (Inactivo) o 1 (Activo)" },
-        { status: 400 }
-      );
-    }
+    const { Estado, DeportesIds, Tarifa } = body;
 
     // Verificar que el árbitro existe
     const arbitroResult = await pool
@@ -75,15 +92,56 @@ export async function PUT(
       );
     }
 
-    // Actualizar solo el Estado del árbitro
-    await pool
-      .request()
-      .input("arbitroId", sql.Int, Number.parseInt(arbitroId))
-      .input("estado", sql.Int, Estado).query(`
+    // Si se envía Estado, validarlo
+    if (Estado !== undefined && Estado !== 0 && Estado !== 1) {
+      return NextResponse.json(
+        { error: "Estado inválido. Debe ser 0 (Inactivo) o 1 (Activo)" },
+        { status: 400 }
+      );
+    }
+
+    // Actualizar campos del árbitro
+    let updateFields: string[] = [];
+    const sqlRequest = pool.request().input("arbitroId", sql.Int, Number.parseInt(arbitroId));
+
+    if (Estado !== undefined) {
+      updateFields.push("Estado = @estado");
+      sqlRequest.input("estado", sql.Int, Estado);
+    }
+
+    if (Tarifa !== undefined) {
+      updateFields.push("Tarifa = @tarifa");
+      sqlRequest.input("tarifa", sql.Decimal(10, 2), Tarifa);
+    }
+
+    if (updateFields.length > 0) {
+      await sqlRequest.query(`
         UPDATE Arbitros
-        SET Estado = @estado
+        SET ${updateFields.join(", ")}
         WHERE IdArbitro = @arbitroId
       `);
+    }
+
+    // Si se envían deportes, actualizar ArbitroDeportes
+    if (DeportesIds !== undefined && Array.isArray(DeportesIds)) {
+      // Eliminar deportes existentes
+      await pool
+        .request()
+        .input("arbitroId", sql.Int, Number.parseInt(arbitroId))
+        .query("DELETE FROM ArbitroDeportes WHERE ArbitroId = @arbitroId");
+
+      // Insertar nuevos deportes
+      for (const deporteId of DeportesIds) {
+        await pool
+          .request()
+          .input("arbitroId", sql.Int, Number.parseInt(arbitroId))
+          .input("deporteId", sql.Int, deporteId)
+          .query(`
+            INSERT INTO ArbitroDeportes (ArbitroId, DeporteId)
+            VALUES (@arbitroId, @deporteId)
+          `);
+      }
+    }
 
     return NextResponse.json({ message: "Árbitro actualizado correctamente" });
   } catch (error) {

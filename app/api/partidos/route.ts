@@ -18,9 +18,13 @@ export async function GET(request: NextRequest) {
     p.ParticipanteBId,
     pa.Nombre as EquipoA,
     pb.Nombre as EquipoB,
+    pa.Nombre as ParticipanteA,
+    pb.Nombre as ParticipanteB,
     CAST(p.FechaHora AS DATE) as FechaPartido,
     FORMAT(p.FechaHora, 'HH:mm') as HoraPartido,
+    p.FechaHora,
     p.Lugar,
+    p.Estado,
     CASE 
       WHEN p.Estado = 0 THEN 'programado'
       WHEN p.Estado = 1 THEN 'en_curso'
@@ -29,6 +33,7 @@ export async function GET(request: NextRequest) {
     END as EstadoPartido,
     p.FixtureIdFixture,
     f.Nombre as Fase,
+    f.Nombre as FixtureNombre,
     f.NumeroRonda,
     f.Grupo,
     p.GanadorId,

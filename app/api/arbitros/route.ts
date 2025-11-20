@@ -7,6 +7,7 @@ export async function GET() {
     const result = await pool.request().query(`
       SELECT 
         a.IdArbitro,
+        a.IdPersona,
         p.Nombre + ' ' + ISNULL(p.Apellido, '') as Nombre,
         p.Mail as Email,
         p.Telefono,

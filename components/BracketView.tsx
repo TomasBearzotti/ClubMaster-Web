@@ -34,6 +34,10 @@ export function BracketView({ partidos }: BracketViewProps) {
 
   const partidosPorRonda = React.useMemo(() => {
     const agrupados: { [ronda: number]: Partido[] } = {};
+    if (!partidos || partidos.length === 0) {
+      return agrupados;
+    }
+    
     partidos.forEach((partido) => {
       const ronda = partido.NumeroRonda || 1;
       if (!agrupados[ronda]) {
@@ -41,6 +45,7 @@ export function BracketView({ partidos }: BracketViewProps) {
       }
       agrupados[ronda].push(partido);
     });
+    
     return agrupados;
   }, [partidos]);
 

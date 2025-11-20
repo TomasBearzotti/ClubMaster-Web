@@ -250,6 +250,7 @@ export default function GestionTorneosPage() {
     try {
       // Obtener detalles del torneo
       const torneoResponse = await fetch(`/api/torneos/${torneoId}`);
+      
       if (torneoResponse.ok) {
         const torneoData = await torneoResponse.json();
         setTorneosDetalle((prev) => ({ ...prev, [torneoId]: torneoData }));
@@ -259,9 +260,9 @@ export default function GestionTorneosPage() {
       const participantesResponse = await fetch(
         `/api/torneos/${torneoId}/participantes`
       );
+      
       if (participantesResponse.ok) {
         const participantesData = await participantesResponse.json();
-        console.log("Participantes del torneo:", participantesData);
         setParticipantesPorTorneo((prev) => ({
           ...prev,
           [torneoId]: participantesData,
@@ -272,8 +273,10 @@ export default function GestionTorneosPage() {
       const partidosResponse = await fetch(
         `/api/partidos?torneoId=${torneoId}`
       );
+      
       if (partidosResponse.ok) {
         const partidosData = await partidosResponse.json();
+        
         // Ordenar partidos por fecha (menor a mayor)
         const partidosOrdenados = partidosData.sort(
           (a: Partido, b: Partido) => {
@@ -291,6 +294,7 @@ export default function GestionTorneosPage() {
 
         // Establecer la fecha por defecto (primera fecha no completada o la menor)
         const fechas = obtenerFechasUnicas(partidosOrdenados);
+        
         if (fechas.length > 0) {
           const primeraFechaNoCompletada = fechas.find((fecha) => {
             const partidosFecha = partidosOrdenados.filter(
@@ -339,9 +343,11 @@ export default function GestionTorneosPage() {
   const obtenerFechasUnicas = (partidos: Partido[]): number[] => {
     const fechas = new Set<number>();
     partidos.forEach((partido) => {
-      const match = partido.FixtureNombre.match(/Fecha (\d+)/);
-      if (match) {
-        fechas.add(parseInt(match[1]));
+      if (partido.FixtureNombre) {
+        const match = partido.FixtureNombre.match(/Fecha (\d+)/);
+        if (match) {
+          fechas.add(parseInt(match[1]));
+        }
       }
     });
     return Array.from(fechas).sort((a, b) => a - b);

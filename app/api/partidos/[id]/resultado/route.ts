@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
     if (resultadoQuery.recordset.length > 0) {
       const resultado = resultadoQuery.recordset[0];
 
-      // 2. Actualizar el partido con el resultado
+      // 2. Actualizar el partido con el resultado y cambiar estado a Finalizado (2)
       await pool
         .request()
         .input("PartidoId", sql.Int, Number(partidoId))
@@ -159,15 +159,33 @@ export async function POST(request: NextRequest) {
         .input("EsEmpate", sql.Bit, resultado.EsEmpate).query(`
           UPDATE Partidos
           SET GanadorId = @GanadorId,
-              EsEmpate = @EsEmpate
+              EsEmpate = @EsEmpate,
+              Estado = 2
           WHERE IdPartido = @PartidoId
         `);
 
       console.log(
-        `Resultado actualizado: GanadorId=${resultado.GanadorId}, EsEmpate=${resultado.EsEmpate}`
+        `Resultado actualizado: GanadorId=${resultado.GanadorId}, EsEmpate=${resultado.EsEmpate}, Estado=Finalizado`
       );
 
-      // 3. Actualizar tabla de posiciones (si el torneo lo requiere)
+      // 3. Actualizar factura del árbitro de Programado (0) a Pendiente (1) si existe
+      try {
+        const facturaResult = await pool
+          .request()
+          .input("PartidoId", sql.Int, Number(partidoId)).query(`
+            UPDATE FacturacionArbitros
+            SET Estado = 1
+            WHERE IdPartido = @PartidoId AND Estado = 0
+          `);
+
+        if (facturaResult.rowsAffected[0] > 0) {
+          console.log(`Factura de árbitro actualizada a Pendiente para partido ${partidoId}`);
+        }
+      } catch (facturaError: any) {
+        console.log(`Info: No se pudo actualizar factura - ${facturaError.message}`);
+      }
+
+      // 4. Actualizar tabla de posiciones (si el torneo lo requiere)
       try {
         await pool
           .request()

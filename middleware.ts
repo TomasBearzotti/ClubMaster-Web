@@ -29,9 +29,9 @@ const PERMISOS_RUTAS: Record<string, string> = {
 
   // Árbitro
   "/arbitro-dashboard": "DASHBOARD_ARBITRO",
-  "/arbitro/deportes": "ARBITRO_GESTION_DEPORTES_Y_DISPONIBILIDAD",
+  "/arbitro/configuracion": "ARBITRO_GESTION_DEPORTES_Y_DISPONIBILIDAD",
+  "/arbitro/finanzas": "ARBITRO_HONORARIOS",
   "/arbitro/partidos": "ARBITRO_GESTION_PARTIDOS",
-  "/arbitro/honorarios": "ARBITRO_HONORARIOS",
 };
 
 export function middleware(request: NextRequest) {
