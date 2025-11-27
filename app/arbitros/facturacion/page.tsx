@@ -128,7 +128,7 @@ export default function FacturacionArbitrosPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          MetodoPago: metodoPago,
+          metodoPago: metodoPago,
         }),
       })
 
