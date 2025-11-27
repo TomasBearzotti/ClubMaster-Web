@@ -325,7 +325,7 @@ export default function ArbitroDashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push("/partidos")}>
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push("/arbitro/partidos")}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-lg font-semibold">Partidos</CardTitle>
               <Trophy className="h-6 w-6 text-purple-600" />
