@@ -24,6 +24,8 @@ import {
   Trash2,
   Calendar,
   BarChart3,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react"
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
 import { format } from "date-fns"
@@ -42,6 +44,7 @@ interface ReporteData {
   equipos?: any[]
   deportes?: any[]
   partidos?: any[]
+  comparacion?: any[]
   estadisticas?: any
 }
 
@@ -68,6 +71,10 @@ export default function GenerarReportesPage() {
     deporte: "",
     torneo: "",
     nivelRiesgo: "",
+    periodo1Inicio: "",
+    periodo1Fin: "",
+    periodo2Inicio: "",
+    periodo2Fin: "",
   })
 
   const [reportData, setReportData] = useState<ReporteData | null>(null)
@@ -277,11 +284,23 @@ export default function GenerarReportesPage() {
       deporte: "",
       torneo: "",
       nivelRiesgo: "",
+      periodo1Inicio: "",
+      periodo1Fin: "",
+      periodo2Inicio: "",
+      periodo2Fin: "",
     })
   }
 
   const handleGenerateReport = async () => {
     if (!selectedReport) return
+
+    // Validación específica para comparativo de períodos
+    if (selectedReport === "comparativo-periodos") {
+      if (!filters.periodo1Inicio || !filters.periodo1Fin || !filters.periodo2Inicio || !filters.periodo2Fin) {
+        toast.error("Debe completar las fechas de ambos períodos para generar el comparativo")
+        return
+      }
+    }
 
     setLoading(true)
     try {
@@ -293,16 +312,21 @@ export default function GenerarReportesPage() {
         }
       })
 
+      console.log("Generando reporte:", selectedReport, "con params:", params.toString())
       const response = await fetch(`/api/reportes/${selectedReport}?${params.toString()}`)
-      if (!response.ok) throw new Error("Error generando reporte")
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Error generando reporte")
+      }
 
       const data = await response.json()
+      console.log("Datos recibidos:", data)
       setReportData(data)
       setShowPreview(true)
       toast.success("Reporte generado exitosamente")
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error generating report:", error)
-      toast.error("Error al generar el reporte")
+      toast.error(error.message || "Error al generar el reporte")
     } finally {
       setLoading(false)
     }
@@ -1068,6 +1092,79 @@ export default function GenerarReportesPage() {
         body: deportesData,
         theme: "striped",
         headStyles: { fillColor: [245, 158, 11] },
+        styles: { fontSize: 8 },
+      })
+    }
+
+    // Comparativo de Períodos
+    if (selectedReport === "comparativo-periodos" && reportData?.comparacion) {
+      const { comparacion, estadisticas } = reportData
+
+      doc.setFontSize(14)
+      doc.text("Resumen de Cambios", 14, yPos)
+      yPos += 8
+
+      doc.setFontSize(10)
+      doc.text(`Período 1: ${estadisticas.periodo1Nombre}`, 14, yPos)
+      yPos += 6
+      doc.text(`Período 2: ${estadisticas.periodo2Nombre}`, 14, yPos)
+      yPos += 6
+      doc.text(`Mejoras significativas (>10%): ${estadisticas.resumen.mejorasSignificativas}`, 14, yPos)
+      yPos += 6
+      doc.text(`Disminuciones (<-10%): ${estadisticas.resumen.disminuciones}`, 14, yPos)
+      yPos += 6
+      doc.text(`Estables (-10% a 10%): ${estadisticas.resumen.estables}`, 14, yPos)
+      yPos += 12
+
+      // Capturar gráficos
+      const chartsElement = document.getElementById("comparativo-charts")
+      if (chartsElement) {
+        const canvas = await html2canvas(chartsElement, { scale: 2 })
+        const imgData = canvas.toDataURL("image/png")
+        
+        // Verificar si necesitamos una nueva página
+        if (yPos > 220) {
+          doc.addPage()
+          yPos = 20
+        }
+
+        doc.setFontSize(12)
+        doc.text("Gráficos Comparativos", 14, yPos)
+        yPos += 8
+
+        const imgWidth = 180
+        const imgHeight = (canvas.height * imgWidth) / canvas.width
+        
+        // Agregar imagen de gráficos
+        doc.addImage(imgData, "PNG", 14, yPos, imgWidth, imgHeight)
+        yPos += imgHeight + 10
+      }
+
+      // Nueva página para la tabla si es necesario
+      if (yPos > 200) {
+        doc.addPage()
+        yPos = 20
+      }
+
+      // Tabla comparativa
+      doc.setFontSize(12)
+      doc.text("Tabla Comparativa Detallada", 14, yPos)
+      yPos += 8
+
+      const comparacionData = comparacion.map((c: any) => [
+        c.metrica,
+        c.categoria,
+        c.formato === "moneda" ? `$${c.periodo1.toLocaleString()}` : c.periodo1.toLocaleString(),
+        c.formato === "moneda" ? `$${c.periodo2.toLocaleString()}` : c.periodo2.toLocaleString(),
+        `${c.variacion.toFixed(2)}%`,
+      ])
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [["Métrica", "Categoría", estadisticas.periodo1Nombre, estadisticas.periodo2Nombre, "Variación %"]],
+        body: comparacionData,
+        theme: "striped",
+        headStyles: { fillColor: [59, 130, 246] },
         styles: { fontSize: 8 },
       })
     }
@@ -3176,6 +3273,228 @@ export default function GenerarReportesPage() {
             </div>
           )}
 
+          {/* Comparativo de Períodos */}
+          {selectedReport === "comparativo-periodos" && reportData?.comparacion && (
+            <div className="space-y-6">
+              {/* Resumen de Cambios */}
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Mejoras Significativas</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-green-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {reportData.estadisticas.resumen.mejorasSignificativas}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Métricas con aumento &gt;10%</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Disminuciones</CardTitle>
+                    <TrendingDown className="h-4 w-4 text-red-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {reportData.estadisticas.resumen.disminuciones}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Métricas con caída &gt;10%</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Estables</CardTitle>
+                    <Users className="h-4 w-4 text-blue-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {reportData.estadisticas.resumen.estables}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Variación entre -10% y 10%</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Información de Períodos */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-xl">
+                    Comparativo: {reportData.estadisticas.periodo1Nombre} vs {reportData.estadisticas.periodo2Nombre}
+                  </CardTitle>
+                  <CardDescription>
+                    Análisis comparativo de métricas clave del club entre dos períodos
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-600">
+                      <h3 className="font-semibold text-blue-700">📅 Período 1</h3>
+                      <p className="text-lg font-bold text-blue-900">{reportData.estadisticas.periodo1Nombre}</p>
+                      <p className="text-xs text-blue-600">{reportData.estadisticas.periodo1Fechas}</p>
+                    </div>
+                    <div className="space-y-2 p-4 bg-green-50 rounded-lg border-l-4 border-green-600">
+                      <h3 className="font-semibold text-green-700">📅 Período 2</h3>
+                      <p className="text-lg font-bold text-green-900">{reportData.estadisticas.periodo2Nombre}</p>
+                      <p className="text-xs text-green-600">{reportData.estadisticas.periodo2Fechas}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Gráficos por Categoría */}
+              <div id="comparativo-charts" className="grid gap-4 md:grid-cols-2">
+                {/* Socios */}
+                {reportData.estadisticas.porCategoria.Socios && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Comparación - Socios</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart
+                          data={reportData.estadisticas.porCategoria.Socios.map((item: any) => ({
+                            name: item.metrica,
+                            [reportData.estadisticas.periodo1Nombre]: item.periodo1,
+                            [reportData.estadisticas.periodo2Nombre]: item.periodo2,
+                          }))}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" angle={-20} textAnchor="end" height={80} />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey={reportData.estadisticas.periodo1Nombre} fill="#3b82f6" />
+                          <Bar dataKey={reportData.estadisticas.periodo2Nombre} fill="#10b981" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Finanzas */}
+                {reportData.estadisticas.porCategoria.Finanzas && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Comparación - Finanzas</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart
+                          data={reportData.estadisticas.porCategoria.Finanzas.map((item: any) => ({
+                            name: item.metrica,
+                            [reportData.estadisticas.periodo1Nombre]: item.periodo1,
+                            [reportData.estadisticas.periodo2Nombre]: item.periodo2,
+                          }))}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" angle={-20} textAnchor="end" height={80} />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey={reportData.estadisticas.periodo1Nombre} fill="#3b82f6" />
+                          <Bar dataKey={reportData.estadisticas.periodo2Nombre} fill="#10b981" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Deportes */}
+                {reportData.estadisticas.porCategoria.Deportes && (
+                  <Card className="md:col-span-2">
+                    <CardHeader>
+                      <CardTitle>Comparación - Deportes</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart
+                          data={reportData.estadisticas.porCategoria.Deportes.map((item: any) => ({
+                            name: item.metrica,
+                            [reportData.estadisticas.periodo1Nombre]: item.periodo1,
+                            [reportData.estadisticas.periodo2Nombre]: item.periodo2,
+                          }))}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" angle={-20} textAnchor="end" height={80} />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey={reportData.estadisticas.periodo1Nombre} fill="#3b82f6" />
+                          <Bar dataKey={reportData.estadisticas.periodo2Nombre} fill="#10b981" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* Tabla Comparativa Detallada */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Comparación Detallada</CardTitle>
+                  <CardDescription>Todas las métricas comparadas entre períodos</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="relative overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Métrica</TableHead>
+                          <TableHead>Categoría</TableHead>
+                          <TableHead className="text-right">Período 1</TableHead>
+                          <TableHead className="text-right">Período 2</TableHead>
+                          <TableHead className="text-right">Variación</TableHead>
+                          <TableHead>Tendencia</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reportData.comparacion.map((item: any, index: number) => (
+                          <TableRow key={index}>
+                            <TableCell className="font-medium">{item.metrica}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{item.categoria}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {item.formato === "moneda"
+                                ? `$${item.periodo1.toLocaleString()}`
+                                : item.periodo1.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {item.formato === "moneda"
+                                ? `$${item.periodo2.toLocaleString()}`
+                                : item.periodo2.toLocaleString()}
+                            </TableCell>
+                            <TableCell
+                              className={`text-right font-semibold ${
+                                item.variacion > 10
+                                  ? "text-green-600"
+                                  : item.variacion < -10
+                                    ? "text-red-600"
+                                    : "text-gray-600"
+                              }`}
+                            >
+                              {item.variacion.toFixed(2)}%
+                            </TableCell>
+                            <TableCell>
+                              {item.variacion > 10 ? (
+                                <TrendingUp className="h-4 w-4 text-green-600" />
+                              ) : item.variacion < -10 ? (
+                                <TrendingDown className="h-4 w-4 text-red-600" />
+                              ) : (
+                                <span className="text-xs text-gray-500">Estable</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {/* Botones de acción */}
           <div className="flex justify-center gap-4 mt-6">
             <Button onClick={handleDownloadPDF} className="bg-blue-600 hover:bg-blue-700">
@@ -3519,6 +3838,60 @@ export default function GenerarReportesPage() {
                             </SelectContent>
                           </Select>
                         </div>
+                      )}
+
+                      {/* Filtros Comparativo de Períodos */}
+                      {selectedReport === "comparativo-periodos" && (
+                        <>
+                          <div className="md:col-span-2 space-y-4">
+                            <div className="border-t pt-4">
+                              <h4 className="font-semibold text-blue-700 mb-3">Período 1</h4>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="periodo1Inicio">Fecha Inicio</Label>
+                                  <Input
+                                    id="periodo1Inicio"
+                                    type="date"
+                                    value={filters.periodo1Inicio || ""}
+                                    onChange={(e) => setFilters({ ...filters, periodo1Inicio: e.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="periodo1Fin">Fecha Fin</Label>
+                                  <Input
+                                    id="periodo1Fin"
+                                    type="date"
+                                    value={filters.periodo1Fin || ""}
+                                    onChange={(e) => setFilters({ ...filters, periodo1Fin: e.target.value })}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <div className="border-t pt-4">
+                              <h4 className="font-semibold text-green-700 mb-3">Período 2</h4>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="periodo2Inicio">Fecha Inicio</Label>
+                                  <Input
+                                    id="periodo2Inicio"
+                                    type="date"
+                                    value={filters.periodo2Inicio || ""}
+                                    onChange={(e) => setFilters({ ...filters, periodo2Inicio: e.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="periodo2Fin">Fecha Fin</Label>
+                                  <Input
+                                    id="periodo2Fin"
+                                    type="date"
+                                    value={filters.periodo2Fin || ""}
+                                    onChange={(e) => setFilters({ ...filters, periodo2Fin: e.target.value })}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </>
                       )}
                     </div>
 
