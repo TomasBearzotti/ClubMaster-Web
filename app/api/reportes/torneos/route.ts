@@ -20,15 +20,21 @@ export async function GET(request: NextRequest) {
         t.FechaInicio,
         t.FechaFin,
         t.Estado,
-        t.CantidadEquipos,
+        t.MaxParticipantes,
+        t.TipoTorneo,
+        t.Descripcion,
         d.Nombre as Deporte,
-        tt.Nombre as TipoTorneo,
-        (SELECT COUNT(*) FROM Partidos WHERE IdTorneo = t.IdTorneo) as TotalPartidos,
-        (SELECT COUNT(*) FROM Partidos WHERE IdTorneo = t.IdTorneo AND Estado = 2) as PartidosFinalizados,
-        (SELECT COUNT(DISTINCT IdEquipo) FROM EquiposTorneos WHERE IdTorneo = t.IdTorneo) as EquiposInscritos
+        CASE 
+          WHEN t.TipoTorneo = 1 THEN 'Liga'
+          WHEN t.TipoTorneo = 2 THEN 'Eliminación Directa'
+          WHEN t.TipoTorneo = 3 THEN 'Grupos + Eliminación'
+          ELSE 'Otro'
+        END as TipoTorneoNombre,
+        (SELECT COUNT(*) FROM Partidos WHERE TorneoId = t.IdTorneo) as TotalPartidos,
+        (SELECT COUNT(*) FROM Partidos WHERE TorneoId = t.IdTorneo AND EstadoPartido = 'Finalizado') as PartidosFinalizados,
+        (SELECT COUNT(DISTINCT CASE WHEN EsEquipo = 1 THEN EquipoId ELSE NULL END) FROM Participantes WHERE TorneoId = t.IdTorneo) as EquiposInscritos
       FROM Torneos t
       INNER JOIN Deportes d ON t.IdDeporte = d.IdDeporte
-      INNER JOIN TiposTorneo tt ON t.IdTipoTorneo = tt.IdTipoTorneo
       WHERE 1=1
     `
 
@@ -69,16 +75,17 @@ export async function GET(request: NextRequest) {
     let statsQuery = `
       SELECT 
         COUNT(*) as TotalTorneos,
-        SUM(CASE WHEN t.Estado = 0 THEN 1 ELSE 0 END) as TorneosPlanificados,
-        SUM(CASE WHEN t.Estado = 1 THEN 1 ELSE 0 END) as TorneosActivos,
-        SUM(CASE WHEN t.Estado = 2 THEN 1 ELSE 0 END) as TorneosFinalizados,
+        SUM(CASE WHEN t.Estado = 0 THEN 1 ELSE 0 END) as Planificados,
+        SUM(CASE WHEN t.Estado = 1 THEN 1 ELSE 0 END) as Activos,
+        SUM(CASE WHEN t.Estado = 2 THEN 1 ELSE 0 END) as Finalizados,
         (SELECT COUNT(*) FROM Partidos p 
-         INNER JOIN Torneos t2 ON p.IdTorneo = t2.IdTorneo 
+         INNER JOIN Torneos t2 ON p.TorneoId = t2.IdTorneo 
          WHERE 1=1
          ${fechaInicio && fechaFin ? "AND t2.FechaInicio BETWEEN @FechaInicio AND @FechaFin" : ""}
         ) as TotalPartidos,
-        (SELECT COUNT(DISTINCT IdEquipo) FROM EquiposTorneos et
-         INNER JOIN Torneos t3 ON et.IdTorneo = t3.IdTorneo
+        (SELECT COUNT(DISTINCT CASE WHEN p.EsEquipo = 1 THEN p.EquipoId ELSE NULL END) 
+         FROM Participantes p
+         INNER JOIN Torneos t3 ON p.TorneoId = t3.IdTorneo
          WHERE 1=1
          ${fechaInicio && fechaFin ? "AND t3.FechaInicio BETWEEN @FechaInicio AND @FechaFin" : ""}
         ) as TotalEquipos
@@ -118,7 +125,7 @@ export async function GET(request: NextRequest) {
       SELECT 
         d.Nombre as Deporte,
         COUNT(*) as Cantidad,
-        SUM(t.CantidadEquipos) as TotalEquipos
+        SUM(t.MaxParticipantes) as TotalEquipos
       FROM Torneos t
       INNER JOIN Deportes d ON t.IdDeporte = d.IdDeporte
       WHERE 1=1
@@ -195,14 +202,13 @@ export async function GET(request: NextRequest) {
         e.IdEquipo,
         e.Nombre,
         d.Nombre as Deporte,
-        COUNT(*) as Participaciones,
-        SUM(CASE WHEN tp.Posicion = 1 THEN 1 ELSE 0 END) as Victorias
-      FROM EquiposTorneos et
-      INNER JOIN Equipos e ON et.IdEquipo = e.IdEquipo
-      INNER JOIN Torneos t ON et.IdTorneo = t.IdTorneo
+        COUNT(DISTINCT p.TorneoId) as Participaciones,
+        0 as Victorias
+      FROM Participantes p
+      INNER JOIN Equipos e ON p.EquipoId = e.IdEquipo
+      INNER JOIN Torneos t ON p.TorneoId = t.IdTorneo
       INNER JOIN Deportes d ON t.IdDeporte = d.IdDeporte
-      LEFT JOIN TablaPosiciones tp ON tp.IdEquipo = e.IdEquipo AND tp.IdTorneo = t.IdTorneo
-      WHERE 1=1
+      WHERE p.EsEquipo = 1
     `
 
     if (fechaInicio && fechaFin) {
@@ -222,7 +228,7 @@ export async function GET(request: NextRequest) {
       equiposQuery += ` AND d.Nombre LIKE @Deporte`
     }
 
-    equiposQuery += ` GROUP BY e.IdEquipo, e.Nombre, d.Nombre ORDER BY Participaciones DESC, Victorias DESC`
+    equiposQuery += ` GROUP BY e.IdEquipo, e.Nombre, d.Nombre ORDER BY Participaciones DESC`
 
     const request5 = pool.request()
     params.forEach((param) => {
@@ -230,12 +236,47 @@ export async function GET(request: NextRequest) {
     })
     const equiposResult = await request5.query(equiposQuery)
 
+    // Procesar datos para gráficos
+    const stats = statsResult.recordset[0]
+    
+    const porDeporte = deportesResult.recordset.map((d: any) => ({
+      name: d.Deporte,
+      value: d.Cantidad,
+      equipos: d.TotalEquipos || 0,
+    }))
+
+    const porEstado = [
+      { name: "Planificados", value: stats.Planificados || 0, color: "#3b82f6" },
+      { name: "Activos", value: stats.Activos || 0, color: "#10b981" },
+      { name: "Finalizados", value: stats.Finalizados || 0, color: "#6b7280" },
+    ].filter((item) => item.value > 0)
+
+    const evolucionMensual = torneosMesResult.recordset.map((item: any) => ({
+      name: item.Mes,
+      value: item.Cantidad,
+    }))
+
+    const topEquipos = equiposResult.recordset.map((e: any) => ({
+      nombre: e.Nombre,
+      deporte: e.Deporte,
+      participaciones: e.Participaciones,
+      victorias: e.Victorias || 0,
+    }))
+
     return NextResponse.json({
       torneos: torneosResult.recordset,
-      estadisticas: statsResult.recordset[0],
-      deportes: deportesResult.recordset,
-      torneosPorMes: torneosMesResult.recordset,
-      topEquipos: equiposResult.recordset,
+      estadisticas: {
+        totalTorneos: stats.TotalTorneos || 0,
+        planificados: stats.Planificados || 0,
+        activos: stats.Activos || 0,
+        finalizados: stats.Finalizados || 0,
+        totalPartidos: stats.TotalPartidos || 0,
+        totalEquipos: stats.TotalEquipos || 0,
+        porDeporte,
+        porEstado,
+        evolucionMensual,
+        topEquipos,
+      },
     })
   } catch (error: any) {
     console.error("Error al obtener reporte de torneos:", error)

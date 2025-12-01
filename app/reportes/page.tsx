@@ -39,6 +39,9 @@ interface ReporteData {
   cuotas?: any[]
   torneos?: any[]
   arbitros?: any[]
+  equipos?: any[]
+  deportes?: any[]
+  partidos?: any[]
   estadisticas?: any
 }
 
@@ -819,9 +822,11 @@ export default function GenerarReportesPage() {
       doc.setFontSize(10)
       doc.text(`Total de Torneos: ${stats.totalTorneos}`, 20, yPos)
       yPos += 6
-      doc.text(`Torneos Activos: ${stats.activos}`, 20, yPos)
+      doc.text(`Planificados: ${stats.planificados}`, 20, yPos)
       yPos += 6
-      doc.text(`Torneos Finalizados: ${stats.finalizados}`, 20, yPos)
+      doc.text(`Activos: ${stats.activos}`, 20, yPos)
+      yPos += 6
+      doc.text(`Finalizados: ${stats.finalizados}`, 20, yPos)
       yPos += 6
       doc.text(`Total de Partidos: ${stats.totalPartidos}`, 20, yPos)
       yPos += 6
@@ -863,12 +868,12 @@ export default function GenerarReportesPage() {
       // Tabla de torneos
       const torneosData = reportData.torneos.map((t: any) => [
         t.Nombre,
-        t.DeporteNombre,
-        t.TipoTorneo,
+        t.Deporte,
+        t.TipoTorneoNombre,
         format(new Date(t.FechaInicio), "dd/MM/yyyy"),
         t.FechaFin ? format(new Date(t.FechaFin), "dd/MM/yyyy") : "En curso",
-        t.CantidadEquipos,
-        t.Estado === 1 ? "Activo" : "Finalizado",
+        `${t.EquiposInscritos}/${t.MaxParticipantes || '-'}`,
+        t.Estado === 0 ? "Planificado" : t.Estado === 1 ? "Activo" : "Finalizado",
       ])
 
       autoTable(doc, {
@@ -877,6 +882,193 @@ export default function GenerarReportesPage() {
         body: torneosData,
         theme: "striped",
         headStyles: { fillColor: [245, 158, 11] },
+        styles: { fontSize: 8 },
+      })
+    }
+
+    // Reporte: Equipos y Participación
+    if (selectedReport === "equipos-participacion" && reportData && reportData.equipos) {
+      doc.setFontSize(16)
+      doc.text("Reporte de Equipos y Participación", 105, 20, { align: "center" })
+
+      // Estadísticas
+      doc.setFontSize(12)
+      let yPos = 30
+      doc.text("Estadísticas Generales:", 14, yPos)
+      yPos += 7
+      doc.setFontSize(10)
+      doc.text(`Total de Equipos: ${reportData.estadisticas.totalEquipos}`, 14, yPos)
+      yPos += 6
+      doc.text(`Equipos Activos: ${reportData.estadisticas.equiposActivos}`, 14, yPos)
+      yPos += 6
+      doc.text(`Equipos Inactivos: ${reportData.estadisticas.equiposInactivos}`, 14, yPos)
+      yPos += 6
+      doc.text(`Total de Participaciones: ${reportData.estadisticas.totalParticipaciones}`, 14, yPos)
+      yPos += 6
+      doc.text(`Torneos con Participación: ${reportData.estadisticas.totalTorneosConParticipacion}`, 14, yPos)
+      yPos += 6
+      doc.text(`Promedio de Participaciones: ${reportData.estadisticas.promedioParticipaciones}`, 14, yPos)
+      yPos += 10
+
+      if (yPos > 200) {
+        doc.addPage()
+        yPos = 20
+      }
+
+      // Tabla de equipos
+      const equiposData = reportData.equipos.map((e: any) => [
+        e.NombreEquipo,
+        e.Deporte,
+        e.TotalTorneos,
+        e.TorneosActivos,
+        e.TorneosFinalizados,
+        e.TotalPartidos,
+      ])
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [["Equipo", "Deporte", "Total Torneos", "Activos", "Finalizados", "Partidos"]],
+        body: equiposData,
+        theme: "striped",
+        headStyles: { fillColor: [59, 130, 246] },
+        styles: { fontSize: 8 },
+      })
+    }
+
+    // Reporte: Árbitros y Partidos
+    if (selectedReport === "arbitros-partidos" && reportData && reportData.arbitros) {
+      doc.setFontSize(16)
+      doc.text("Reporte de Árbitros y Partidos", 105, 20, { align: "center" })
+
+      // Estadísticas
+      doc.setFontSize(12)
+      let yPos = 30
+      doc.text("Estadísticas Generales:", 14, yPos)
+      yPos += 7
+      doc.setFontSize(10)
+      doc.text(`Total de Árbitros: ${reportData.estadisticas.totalArbitros}`, 14, yPos)
+      yPos += 6
+      doc.text(`Árbitros Activos: ${reportData.estadisticas.activos}`, 14, yPos)
+      yPos += 6
+      doc.text(`Árbitros Inactivos: ${reportData.estadisticas.inactivos}`, 14, yPos)
+      yPos += 6
+      doc.text(`Total de Partidos: ${reportData.estadisticas.totalPartidos}`, 14, yPos)
+      yPos += 6
+      doc.text(`Promedio Partidos por Árbitro: ${reportData.estadisticas.promedioPartidosPorArbitro}`, 14, yPos)
+      yPos += 10
+
+      if (yPos > 200) {
+        doc.addPage()
+        yPos = 20
+      }
+
+      // Tabla de árbitros
+      const arbitrosData = reportData.arbitros.map((a: any) => [
+        `${a.Nombre} ${a.Apellido}`,
+        a.Dni,
+        a.Mail,
+        a.Telefono || "-",
+        a.TotalPartidos,
+        a.TotalTorneos,
+        a.Estado === 1 ? "Activo" : "Inactivo",
+      ])
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [["Árbitro", "DNI", "Email", "Teléfono", "Partidos", "Torneos", "Estado"]],
+        body: arbitrosData,
+        theme: "striped",
+        headStyles: { fillColor: [99, 102, 241] },
+        styles: { fontSize: 8 },
+      })
+
+      // Si hay partidos, agregar tabla de partidos
+      if (reportData.partidos && reportData.partidos.length > 0) {
+        yPos = (doc as any).lastAutoTable.finalY + 10
+
+        if (yPos > 250) {
+          doc.addPage()
+          yPos = 20
+        }
+
+        doc.setFontSize(12)
+        doc.text("Partidos Arbitrados:", 14, yPos)
+        yPos += 7
+
+        const partidosData = reportData.partidos.slice(0, 20).map((p: any) => [
+          format(new Date(p.FechaPartido), "dd/MM/yyyy"),
+          p.TorneoNombre,
+          p.DeporteNombre,
+          `${p.EquipoA || "TBD"} vs ${p.EquipoB || "TBD"}`,
+          `${p.ArbitroNombre} ${p.ArbitroApellido}`,
+          p.EstadoPartido,
+        ])
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [["Fecha", "Torneo", "Deporte", "Equipos", "Árbitro", "Estado"]],
+          body: partidosData,
+          theme: "striped",
+          headStyles: { fillColor: [99, 102, 241] },
+          styles: { fontSize: 7 },
+        })
+
+        if (reportData.partidos.length > 20) {
+          yPos = (doc as any).lastAutoTable.finalY + 5
+          doc.setFontSize(8)
+          doc.text(`(Mostrando 20 de ${reportData.partidos.length} partidos)`, 14, yPos)
+        }
+      }
+    }
+
+    // Reporte: Actividad por Deporte
+    if (selectedReport === "actividad-deporte" && reportData && reportData.deportes) {
+      doc.setFontSize(16)
+      doc.text("Reporte de Actividad por Deporte", 105, 20, { align: "center" })
+
+      // Estadísticas
+      doc.setFontSize(12)
+      let yPos = 30
+      doc.text("Estadísticas Generales:", 14, yPos)
+      yPos += 7
+      doc.setFontSize(10)
+      doc.text(`Total de Deportes: ${reportData.estadisticas.totalDeportes}`, 14, yPos)
+      yPos += 6
+      doc.text(`Total de Equipos: ${reportData.estadisticas.totalEquipos}`, 14, yPos)
+      yPos += 6
+      doc.text(`Total de Torneos: ${reportData.estadisticas.totalTorneos}`, 14, yPos)
+      yPos += 6
+      doc.text(`Total de Partidos: ${reportData.estadisticas.totalPartidos}`, 14, yPos)
+      yPos += 6
+      doc.text(`Socios Participantes: ${reportData.estadisticas.totalSocios}`, 14, yPos)
+      yPos += 6
+      doc.text(`Promedio Partidos por Torneo: ${reportData.estadisticas.promedioPartidosPorTorneo}`, 14, yPos)
+      yPos += 10
+
+      if (yPos > 200) {
+        doc.addPage()
+        yPos = 20
+      }
+
+      // Tabla de deportes
+      const deportesData = reportData.deportes.map((d: any) => [
+        d.Deporte,
+        d.TotalEquipos,
+        d.TotalTorneos,
+        d.TorneosActivos,
+        d.TorneosFinalizados,
+        d.TotalPartidos,
+        d.SociosParticipantes,
+        `${d.TasaFinalizacion}%`,
+      ])
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [["Deporte", "Equipos", "Torneos", "Activos", "Finalizados", "Partidos", "Socios", "% Finalización"]],
+        body: deportesData,
+        theme: "striped",
+        headStyles: { fillColor: [245, 158, 11] },
+        styles: { fontSize: 8 },
       })
     }
 
@@ -2248,12 +2440,48 @@ export default function GenerarReportesPage() {
                           fill="#8884d8"
                           dataKey="value"
                         >
-                          {reportData.estadisticas.porEstado.map((_: any, index: number) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          {reportData.estadisticas.porEstado.map((entry: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
                         </Pie>
                         <Tooltip />
                       </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Evolución Mensual */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Evolución Mensual</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={reportData.estadisticas.evolucionMensual}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#8b5cf6" name="Torneos" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Top Equipos */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Top Equipos por Participación</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={reportData.estadisticas.topEquipos.slice(0, 5)} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" />
+                        <YAxis dataKey="nombre" type="category" width={100} />
+                        <Tooltip />
+                        <Bar dataKey="participaciones" fill="#06b6d4" name="Participaciones" />
+                      </BarChart>
                     </ResponsiveContainer>
                   </CardContent>
                 </Card>
@@ -2282,16 +2510,26 @@ export default function GenerarReportesPage() {
                         {reportData.torneos.map((torneo: any) => (
                           <TableRow key={torneo.IdTorneo}>
                             <TableCell className="font-medium">{torneo.Nombre}</TableCell>
-                            <TableCell>{torneo.DeporteNombre}</TableCell>
-                            <TableCell>{torneo.TipoTorneo}</TableCell>
+                            <TableCell>{torneo.Deporte}</TableCell>
+                            <TableCell>{torneo.TipoTorneoNombre}</TableCell>
                             <TableCell>{format(new Date(torneo.FechaInicio), "dd/MM/yyyy")}</TableCell>
                             <TableCell>
                               {torneo.FechaFin ? format(new Date(torneo.FechaFin), "dd/MM/yyyy") : "En curso"}
                             </TableCell>
-                            <TableCell>{torneo.CantidadEquipos}</TableCell>
                             <TableCell>
-                              <Badge variant={torneo.Estado === 1 ? "default" : "secondary"}>
-                                {torneo.Estado === 1 ? "Activo" : "Finalizado"}
+                              {torneo.EquiposInscritos}/{torneo.MaxParticipantes || '-'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={
+                                  torneo.Estado === 1 ? "default" : 
+                                  torneo.Estado === 2 ? "secondary" : 
+                                  "outline"
+                                }
+                              >
+                                {torneo.Estado === 0 ? "Planificado" : 
+                                 torneo.Estado === 1 ? "Activo" : 
+                                 "Finalizado"}
                               </Badge>
                             </TableCell>
                           </TableRow>
@@ -2301,6 +2539,640 @@ export default function GenerarReportesPage() {
                   </div>
                 </CardContent>
               </Card>
+            </div>
+          )}
+
+          {selectedReport === "equipos-participacion" && reportData.equipos && (
+            <div className="space-y-6">
+              {/* Estadísticas */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Total Equipos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-gray-900">{reportData.estadisticas.totalEquipos}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Equipos Activos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600">{reportData.estadisticas.equiposActivos}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Equipos Inactivos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-gray-500">{reportData.estadisticas.equiposInactivos}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Total Participaciones</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-blue-600">{reportData.estadisticas.totalParticipaciones}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Torneos con Equipos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-purple-600">{reportData.estadisticas.totalTorneosConParticipacion}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Promedio Participaciones</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-orange-600">{reportData.estadisticas.promedioParticipaciones}</div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Gráficos */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Distribución por Deporte */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Equipos por Deporte</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={reportData.estadisticas.porDeporte}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="equipos" fill="#3b82f6" name="Equipos" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Por Estado */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Participación en Torneos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={reportData.estadisticas.porEstado}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={100}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {reportData.estadisticas.porEstado.map((entry: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Top Equipos Más Activos */}
+                <Card className="md:col-span-2">
+                  <CardHeader>
+                    <CardTitle className="text-base">Top 10 Equipos Más Activos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={400}>
+                      <BarChart data={reportData.estadisticas.topEquipos} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" />
+                        <YAxis dataKey="nombre" type="category" width={150} />
+                        <Tooltip />
+                        <Bar dataKey="participaciones" fill="#10b981" name="Participaciones" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Tabla de Equipos */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Lista de Equipos</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="relative w-full overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Equipo</TableHead>
+                          <TableHead>Deporte</TableHead>
+                          <TableHead>Total Torneos</TableHead>
+                          <TableHead>Torneos Activos</TableHead>
+                          <TableHead>Torneos Finalizados</TableHead>
+                          <TableHead>Total Partidos</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reportData.equipos.map((equipo: any) => (
+                          <TableRow key={equipo.IdEquipo}>
+                            <TableCell className="font-medium">{equipo.NombreEquipo}</TableCell>
+                            <TableCell>{equipo.Deporte}</TableCell>
+                            <TableCell>{equipo.TotalTorneos}</TableCell>
+                            <TableCell>{equipo.TorneosActivos}</TableCell>
+                            <TableCell>{equipo.TorneosFinalizados}</TableCell>
+                            <TableCell>{equipo.TotalPartidos}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {selectedReport === "arbitros-partidos" && reportData.arbitros && (
+            <div className="space-y-6">
+              {/* Estadísticas */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Total Árbitros</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-gray-900">{reportData.estadisticas.totalArbitros}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Árbitros Activos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600">{reportData.estadisticas.activos}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Árbitros Inactivos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-gray-500">{reportData.estadisticas.inactivos}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Total Partidos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-blue-600">{reportData.estadisticas.totalPartidos}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Promedio Partidos/Árbitro</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-purple-600">{reportData.estadisticas.promedioPartidosPorArbitro}</div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Gráficos */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Estado de Árbitros */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Estado de Árbitros</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={reportData.estadisticas.porEstado}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={100}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {reportData.estadisticas.porEstado.map((entry: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={entry.name === "Activos" ? "#10b981" : "#6b7280"} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Partidos por Deporte */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Partidos por Deporte</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={reportData.estadisticas.porDeporte}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#3b82f6" name="Partidos" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Top Árbitros */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Top 10 Árbitros por Partidos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={400}>
+                      <BarChart data={reportData.estadisticas.topArbitros} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" />
+                        <YAxis dataKey="name" type="category" width={150} />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#10b981" name="Partidos" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Estado de Partidos */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Estado de Partidos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={400}>
+                      <PieChart>
+                        <Pie
+                          data={reportData.estadisticas.porEstadoPartido}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={100}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {reportData.estadisticas.porEstadoPartido.map((entry: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Tabla de Árbitros */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Lista de Árbitros</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="relative w-full overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nombre</TableHead>
+                          <TableHead>DNI</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Teléfono</TableHead>
+                          <TableHead>Partidos</TableHead>
+                          <TableHead>Torneos</TableHead>
+                          <TableHead>Estado</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reportData.arbitros.map((arbitro: any) => (
+                          <TableRow key={arbitro.IdArbitro}>
+                            <TableCell className="font-medium">{`${arbitro.Nombre} ${arbitro.Apellido}`}</TableCell>
+                            <TableCell>{arbitro.Dni}</TableCell>
+                            <TableCell>{arbitro.Mail}</TableCell>
+                            <TableCell>{arbitro.Telefono}</TableCell>
+                            <TableCell>{arbitro.TotalPartidos}</TableCell>
+                            <TableCell>{arbitro.TotalTorneos}</TableCell>
+                            <TableCell>
+                              <Badge variant={arbitro.Estado === 1 ? "default" : "secondary"}>
+                                {arbitro.Estado === 1 ? "Activo" : "Inactivo"}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Tabla de Partidos */}
+              {reportData.partidos && reportData.partidos.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Lista de Partidos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="relative w-full overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Fecha</TableHead>
+                            <TableHead>Hora</TableHead>
+                            <TableHead>Torneo</TableHead>
+                            <TableHead>Deporte</TableHead>
+                            <TableHead>Equipos</TableHead>
+                            <TableHead>Árbitro</TableHead>
+                            <TableHead>Lugar</TableHead>
+                            <TableHead>Estado</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {reportData.partidos.map((partido: any) => (
+                            <TableRow key={partido.IdPartido}>
+                              <TableCell>{format(new Date(partido.FechaPartido), "dd/MM/yyyy")}</TableCell>
+                              <TableCell>{partido.HoraPartido || "-"}</TableCell>
+                              <TableCell>{partido.TorneoNombre}</TableCell>
+                              <TableCell>{partido.DeporteNombre}</TableCell>
+                              <TableCell>{`${partido.EquipoA || "TBD"} vs ${partido.EquipoB || "TBD"}`}</TableCell>
+                              <TableCell>{`${partido.ArbitroNombre} ${partido.ArbitroApellido}`}</TableCell>
+                              <TableCell>{partido.Lugar || "-"}</TableCell>
+                              <TableCell>
+                                <Badge 
+                                  variant={
+                                    partido.EstadoPartido === "Finalizado" ? "secondary" : 
+                                    partido.EstadoPartido === "En Curso" ? "default" : 
+                                    "outline"
+                                  }
+                                >
+                                  {partido.EstadoPartido}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {selectedReport === "actividad-deporte" && reportData.deportes && (
+            <div className="space-y-6">
+              {/* Estadísticas */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Total Deportes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-gray-900">{reportData.estadisticas.totalDeportes}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Total Equipos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-blue-600">{reportData.estadisticas.totalEquipos}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Total Torneos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-purple-600">{reportData.estadisticas.totalTorneos}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Total Partidos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600">{reportData.estadisticas.totalPartidos}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Socios Participantes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-orange-600">{reportData.estadisticas.totalSocios}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600">Promedio Partidos/Torneo</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-teal-600">{reportData.estadisticas.promedioPartidosPorTorneo}</div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Gráficos */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Actividad por Deporte */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Torneos por Deporte</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={reportData.deportes}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="Deporte" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="TotalTorneos" fill="#8b5cf6" name="Torneos" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Partidos por Deporte */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Partidos por Deporte</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={reportData.deportes}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="Deporte" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="TotalPartidos" fill="#10b981" name="Partidos" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Equipos por Deporte */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Equipos por Deporte</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={reportData.deportes}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ Deporte, TotalEquipos }) => `${Deporte}: ${TotalEquipos}`}
+                          outerRadius={100}
+                          fill="#8884d8"
+                          dataKey="TotalEquipos"
+                        >
+                          {reportData.deportes.map((entry: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Estado de Partidos */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Estado de Partidos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={reportData.estadisticas.partidosPorEstado}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={100}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {reportData.estadisticas.partidosPorEstado.map((entry: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Tabla de Deportes */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Detalle por Deporte</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="relative w-full overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Deporte</TableHead>
+                          <TableHead>Equipos</TableHead>
+                          <TableHead>Torneos</TableHead>
+                          <TableHead>Activos</TableHead>
+                          <TableHead>Finalizados</TableHead>
+                          <TableHead>Partidos</TableHead>
+                          <TableHead>Finalizados</TableHead>
+                          <TableHead>Programados</TableHead>
+                          <TableHead>Socios</TableHead>
+                          <TableHead>% Finalización</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reportData.deportes.map((deporte: any) => (
+                          <TableRow key={deporte.IdDeporte}>
+                            <TableCell className="font-medium">{deporte.Deporte}</TableCell>
+                            <TableCell>{deporte.TotalEquipos}</TableCell>
+                            <TableCell>{deporte.TotalTorneos}</TableCell>
+                            <TableCell>{deporte.TorneosActivos}</TableCell>
+                            <TableCell>{deporte.TorneosFinalizados}</TableCell>
+                            <TableCell>{deporte.TotalPartidos}</TableCell>
+                            <TableCell>{deporte.PartidosFinalizados}</TableCell>
+                            <TableCell>{deporte.PartidosProgramados}</TableCell>
+                            <TableCell>{deporte.SociosParticipantes}</TableCell>
+                            <TableCell>{deporte.TasaFinalizacion}%</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Top Torneos */}
+              {reportData.estadisticas.topTorneos && reportData.estadisticas.topTorneos.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Top 5 Torneos Más Activos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="relative w-full overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Torneo</TableHead>
+                            <TableHead>Deporte</TableHead>
+                            <TableHead>Partidos</TableHead>
+                            <TableHead>Participantes</TableHead>
+                            <TableHead>Fecha Inicio</TableHead>
+                            <TableHead>Estado</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {reportData.estadisticas.topTorneos.map((torneo: any, index: number) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-medium">{torneo.Torneo}</TableCell>
+                              <TableCell>{torneo.Deporte}</TableCell>
+                              <TableCell>{torneo.TotalPartidos}</TableCell>
+                              <TableCell>{torneo.Participantes}</TableCell>
+                              <TableCell>{format(new Date(torneo.FechaInicio), "dd/MM/yyyy")}</TableCell>
+                              <TableCell>
+                                <Badge 
+                                  variant={
+                                    torneo.Estado === "Activo" ? "default" : 
+                                    torneo.Estado === "Finalizado" ? "secondary" : 
+                                    "outline"
+                                  }
+                                >
+                                  {torneo.Estado}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
 
