@@ -38,6 +38,7 @@ interface ReporteData {
   socios?: any[]
   cuotas?: any[]
   torneos?: any[]
+  arbitros?: any[]
   estadisticas?: any
 }
 
@@ -63,6 +64,7 @@ export default function GenerarReportesPage() {
     tipoMembresia: "",
     deporte: "",
     torneo: "",
+    nivelRiesgo: "",
   })
 
   const [reportData, setReportData] = useState<ReporteData | null>(null)
@@ -119,7 +121,7 @@ export default function GenerarReportesPage() {
           description: "Análisis de deudas y socios morosos",
           icon: CreditCard,
           color: "bg-red-500 hover:bg-red-600",
-          filters: ["antiguedadDeuda", "montoMinimo", "tipoMembresia"],
+          filters: ["fechaInicio", "fechaFin", "tipoMembresia", "nivelRiesgo"],
         },
         {
           id: "arbitros-finanzas",
@@ -130,12 +132,12 @@ export default function GenerarReportesPage() {
           filters: ["fechaInicio", "fechaFin", "deporte"],
         },
         {
-          id: "proyeccion-financiera",
-          title: "Proyección Financiera",
-          description: "Estimación de ingresos y gastos futuros",
+          id: "estado-financiero",
+          title: "Estado Financiero del Club",
+          description: "Balance de ingresos y egresos del club",
           icon: BarChart3,
           color: "bg-emerald-500 hover:bg-emerald-600",
-          filters: ["periodoProyeccion", "escenario"],
+          filters: ["fechaInicio", "fechaFin", "tipoMembresia"],
         },
       ],
     },
@@ -271,6 +273,7 @@ export default function GenerarReportesPage() {
       tipoMembresia: "",
       deporte: "",
       torneo: "",
+      nivelRiesgo: "",
     })
   }
 
@@ -547,6 +550,264 @@ export default function GenerarReportesPage() {
         body: cuotasData,
         theme: "striped",
         headStyles: { fillColor: [16, 185, 129] },
+      })
+    } else if (selectedReport === "morosidad" && reportData?.socios) {
+      // Estadísticas
+      const stats = reportData.estadisticas
+      doc.setFontSize(14)
+      doc.text("Estadísticas de Morosidad", 14, yPos)
+      yPos += 10
+
+      doc.setFontSize(10)
+      doc.text(`Total de Morosos: ${stats.totalMorosos}`, 20, yPos)
+      yPos += 6
+      doc.text(`Cuotas Vencidas: ${stats.totalCuotasVencidas}`, 20, yPos)
+      yPos += 6
+      doc.text(`Deuda Total: $${stats.deudaTotal.toFixed(2)}`, 20, yPos)
+      yPos += 6
+      doc.text(`Promedio por Socio: $${stats.promedioDeuda.toFixed(2)}`, 20, yPos)
+      yPos += 6
+      doc.text(`Morosos +1 mes: ${stats.morososMasDe1Mes}`, 20, yPos)
+      yPos += 6
+      doc.text(`Morosos +3 meses: ${stats.morososMasDe3Meses}`, 20, yPos)
+      yPos += 6
+      doc.text(`Morosos +6 meses: ${stats.morososMasDe6Meses}`, 20, yPos)
+      yPos += 15
+
+      // Capturar gráficos
+      const chartsElement = document.getElementById("morosidad-charts")
+      if (chartsElement) {
+        try {
+          const canvas = await html2canvas(chartsElement, {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+          })
+          const imgData = canvas.toDataURL("image/png")
+          const imgWidth = 180
+          const imgHeight = (canvas.height * imgWidth) / canvas.width
+
+          // Verificar si necesitamos una nueva página
+          if (yPos + imgHeight > 280) {
+            doc.addPage()
+            yPos = 20
+          }
+
+          doc.addImage(imgData, "PNG", 14, yPos, imgWidth, imgHeight)
+          yPos += imgHeight + 10
+        } catch (error) {
+          console.error("Error capturando gráficos:", error)
+        }
+      }
+
+      // Verificar si necesitamos una nueva página para la tabla
+      if (yPos > 200) {
+        doc.addPage()
+        yPos = 20
+      }
+
+      // Tabla de socios morosos
+      const morososData = reportData.socios.map((s: any) => [
+        s.NumeroSocio,
+        `${s.Nombre} ${s.Apellido}`,
+        s.TipoMembresia,
+        s.CuotasVencidas,
+        `$${s.DeudaTotal.toFixed(2)}`,
+        `${s.DiasEnMora} días`,
+        s.NivelRiesgo === "critico" ? "Crítico" : s.NivelRiesgo === "alto" ? "Alto" : "Medio",
+      ])
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [["N° Socio", "Socio", "Membresía", "Cuotas", "Deuda", "Días Mora", "Riesgo"]],
+        body: morososData,
+        theme: "striped",
+        headStyles: { fillColor: [239, 68, 68] },
+        didParseCell: (data: any) => {
+          // Colorear las filas según el riesgo
+          if (data.section === "body" && reportData.socios) {
+            const riesgo = reportData.socios[data.row.index].NivelRiesgo
+            if (riesgo === "critico") {
+              data.cell.styles.fillColor = [254, 226, 226] // rojo claro
+            } else if (riesgo === "alto") {
+              data.cell.styles.fillColor = [254, 243, 199] // naranja claro
+            }
+          }
+        },
+      })
+    } else if (selectedReport === "arbitros-finanzas" && reportData?.arbitros) {
+      // Estadísticas
+      const stats = reportData.estadisticas
+      doc.setFontSize(14)
+      doc.text("Gastos de Árbitros", 14, yPos)
+      yPos += 10
+
+      doc.setFontSize(10)
+      doc.text(`Total de Árbitros: ${stats.totalArbitros}`, 20, yPos)
+      yPos += 6
+      doc.text(`Total de Partidos: ${stats.totalPartidos}`, 20, yPos)
+      yPos += 6
+      doc.text(`Partidos Finalizados: ${stats.partidosFinalizados}`, 20, yPos)
+      yPos += 6
+      doc.text(`Partidos Programados: ${stats.partidosProgramados}`, 20, yPos)
+      yPos += 6
+      doc.text(`Tarifa por Partido: $${stats.tarifaPorPartido}`, 20, yPos)
+      yPos += 6
+      doc.text(`Monto Pagado: $${stats.montoPagado} (${stats.porcentajePagado}%)`, 20, yPos)
+      yPos += 6
+      doc.text(`Monto Pendiente: $${stats.montoPendiente}`, 20, yPos)
+      yPos += 6
+      doc.text(`Monto Total: $${stats.montoTotal}`, 20, yPos)
+      yPos += 15
+
+      // Capturar gráficos
+      const chartsElement = document.getElementById("arbitros-finanzas-charts")
+      if (chartsElement) {
+        try {
+          const canvas = await html2canvas(chartsElement, {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+          })
+          const imgData = canvas.toDataURL("image/png")
+          const imgWidth = 180
+          const imgHeight = (canvas.height * imgWidth) / canvas.width
+
+          // Verificar si necesitamos una nueva página
+          if (yPos + imgHeight > 280) {
+            doc.addPage()
+            yPos = 20
+          }
+
+          doc.addImage(imgData, "PNG", 14, yPos, imgWidth, imgHeight)
+          yPos += imgHeight + 10
+        } catch (error) {
+          console.error("Error capturando gráficos:", error)
+        }
+      }
+
+      // Verificar si necesitamos una nueva página para la tabla
+      if (yPos > 200) {
+        doc.addPage()
+        yPos = 20
+      }
+
+      // Tabla de árbitros
+      const arbitrosData = reportData.arbitros.map((a: any) => [
+        `${a.Nombre} ${a.Apellido}`,
+        a.Dni,
+        `$${a.TarifaArbitro?.toFixed(2) || '50000.00'}`,
+        a.TotalPartidos,
+        a.PartidosFinalizados,
+        a.PartidosProgramados,
+        `$${a.MontoPagado.toFixed(2)}`,
+        `$${a.MontoPendiente.toFixed(2)}`,
+        `$${a.MontoTotal.toFixed(2)}`,
+      ])
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [["Árbitro", "DNI", "Tarifa", "Total", "Finalizados", "Programados", "Pagado", "Pendiente", "Total ($)"]],
+        body: arbitrosData,
+        theme: "striped",
+        headStyles: { fillColor: [13, 148, 136] },
+        styles: { fontSize: 8 },
+      })
+    } else if (selectedReport === "estado-financiero" && reportData?.estadisticas) {
+      // Estadísticas financieras
+      const stats = reportData.estadisticas
+      doc.setFontSize(14)
+      doc.text("Estado Financiero del Club", 14, yPos)
+      yPos += 10
+
+      doc.setFontSize(10)
+      doc.text(`Balance Total: $${stats.balance}`, 20, yPos)
+      yPos += 6
+      doc.text(`Estado: ${stats.estado}`, 20, yPos)
+      yPos += 6
+      doc.text(`Margen: ${stats.margenPorcentaje}%`, 20, yPos)
+      yPos += 10
+
+      doc.setFontSize(12)
+      doc.text("Ingresos", 20, yPos)
+      yPos += 6
+      doc.setFontSize(10)
+      doc.text(`Total Ingresos: $${stats.totalIngresos}`, 25, yPos)
+      yPos += 6
+      doc.text(`Cuotas Pagadas: ${stats.totalCuotasPagadas}`, 25, yPos)
+      yPos += 6
+      doc.text(`Promedio por Cuota: $${stats.promedioIngreso}`, 25, yPos)
+      yPos += 10
+
+      doc.setFontSize(12)
+      doc.text("Egresos", 20, yPos)
+      yPos += 6
+      doc.setFontSize(10)
+      doc.text(`Total Egresos: $${stats.totalEgresos}`, 25, yPos)
+      yPos += 6
+      doc.text(`Partidos Finalizados: ${stats.totalPartidosFinalizados}`, 25, yPos)
+      yPos += 6
+      doc.text(`Promedio por Partido: $${stats.promedioEgreso}`, 25, yPos)
+      yPos += 15
+
+      // Capturar gráficos
+      const chartsElement = document.getElementById("estado-financiero-charts")
+      if (chartsElement) {
+        try {
+          const canvas = await html2canvas(chartsElement, {
+            scale: 2,
+            logging: false,
+            useCORS: true,
+          })
+
+          const imgData = canvas.toDataURL("image/png")
+          const imgWidth = 180
+          const imgHeight = (canvas.height * imgWidth) / canvas.width
+
+          if (yPos + imgHeight > 270) {
+            doc.addPage()
+            yPos = 20
+          }
+
+          doc.addImage(imgData, "PNG", 14, yPos, imgWidth, imgHeight)
+          yPos += imgHeight + 10
+        } catch (error) {
+          console.error("Error capturando gráficos:", error)
+        }
+      }
+
+      // Tabla de evolución mensual
+      if (yPos > 200) {
+        doc.addPage()
+        yPos = 20
+      }
+
+      const evolucionData = stats.evolucionMensual.map((item: any) => [
+        item.name,
+        `$${item.ingresos.toFixed(2)}`,
+        `$${item.egresos.toFixed(2)}`,
+        `$${item.balance.toFixed(2)}`,
+      ])
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [["Período", "Ingresos", "Egresos", "Balance"]],
+        body: evolucionData,
+        theme: "striped",
+        headStyles: { fillColor: [16, 185, 129] },
+        columnStyles: {
+          3: { 
+            cellWidth: 'auto',
+            halign: 'right'
+          }
+        },
+        didDrawCell: (data: any) => {
+          if (data.section === 'body' && data.column.index === 3) {
+            const value = parseFloat(data.cell.raw.replace('$', ''))
+            const color = value >= 0 ? [16, 185, 129] : [239, 68, 68]
+            doc.setTextColor(color[0], color[1], color[2])
+          }
+        }
       })
     } else if (selectedReport === "torneos" && reportData?.torneos) {
       // Estadísticas
@@ -1204,6 +1465,713 @@ export default function GenerarReportesPage() {
             </div>
           )}
 
+          {selectedReport === "morosidad" && reportData.socios && (
+            <div className="space-y-6">
+              {/* Estadísticas */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Total Morosos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-red-600">{reportData.estadisticas.totalMorosos}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Cuotas Vencidas</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{reportData.estadisticas.totalCuotasVencidas}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Deuda Total</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-red-600">
+                      ${reportData.estadisticas.deudaTotal.toFixed(2)}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Promedio por Socio</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      ${reportData.estadisticas.promedioDeuda.toFixed(2)}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Gráficos */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="morosidad-charts">
+                {/* Distribución por Nivel de Riesgo */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Distribución por Nivel de Riesgo</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie
+                          data={reportData.estadisticas.distribucionRiesgo.map((item: any) => ({
+                            name: item.NivelRiesgo,
+                            value: item.Cantidad,
+                          }))}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {reportData.estadisticas.distribucionRiesgo.map((_: any, index: number) => {
+                            const colors = ["#ef4444", "#f97316", "#eab308"] // rojo, naranja, amarillo
+                            return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                          })}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Deuda por Nivel de Riesgo */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Deuda Total por Nivel</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart
+                        data={reportData.estadisticas.distribucionRiesgo.map((item: any) => ({
+                          name: item.NivelRiesgo.replace(" (Crítico)", "").replace(" (Alto)", "").replace(" (Medio)", ""),
+                          monto: item.MontoTotal,
+                        }))}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                        <Bar dataKey="monto" fill="#ef4444" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Distribución por Tipo de Membresía */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Morosidad por Tipo de Membresía</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart
+                        data={reportData.estadisticas.porMembresia.map((item: any) => ({
+                          name: item.TipoMembresia,
+                          morosos: item.CantidadMorosos,
+                          deuda: item.DeudaTotal,
+                        }))}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis yAxisId="left" />
+                        <YAxis yAxisId="right" orientation="right" />
+                        <Tooltip />
+                        <Bar yAxisId="left" dataKey="morosos" fill="#f97316" name="Morosos" />
+                        <Bar yAxisId="right" dataKey="deuda" fill="#ef4444" name="Deuda ($)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Evolución Mensual */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Evolución de Morosidad (Últimos 6 meses)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart
+                        data={reportData.estadisticas.evolucion.map((item: any) => ({
+                          mes: item.Mes,
+                          morosos: item.MorososDelMes,
+                          deuda: item.DeudaTotal,
+                        }))}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="mes" />
+                        <YAxis yAxisId="left" />
+                        <YAxis yAxisId="right" orientation="right" />
+                        <Tooltip />
+                        <Bar yAxisId="left" dataKey="morosos" fill="#f97316" name="Morosos" />
+                        <Bar yAxisId="right" dataKey="deuda" fill="#ef4444" name="Deuda ($)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Estadísticas adicionales */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Mora +1 mes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl font-bold text-orange-600">
+                      {reportData.estadisticas.morososMasDe1Mes}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {((reportData.estadisticas.morososMasDe1Mes / reportData.estadisticas.totalMorosos) * 100).toFixed(1)}% del total
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Mora +3 meses</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl font-bold text-red-600">
+                      {reportData.estadisticas.morososMasDe3Meses}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {((reportData.estadisticas.morososMasDe3Meses / reportData.estadisticas.totalMorosos) * 100).toFixed(1)}% del total
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Mora +6 meses</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl font-bold text-red-900">
+                      {reportData.estadisticas.morososMasDe6Meses}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {((reportData.estadisticas.morososMasDe6Meses / reportData.estadisticas.totalMorosos) * 100).toFixed(1)}% del total
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Tabla de Socios Morosos */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Listado de Socios con Morosidad</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Los socios en rojo están a punto de ser suspendidos (5 cuotas vencidas)
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left p-2">N° Socio</th>
+                          <th className="text-left p-2">Nombre</th>
+                          <th className="text-left p-2">DNI</th>
+                          <th className="text-left p-2">Teléfono</th>
+                          <th className="text-left p-2">Membresía</th>
+                          <th className="text-left p-2">Cuotas Vencidas</th>
+                          <th className="text-left p-2">Deuda Total</th>
+                          <th className="text-left p-2">Días en Mora</th>
+                          <th className="text-left p-2">Riesgo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportData.socios.map((socio: any) => (
+                          <tr
+                            key={socio.NumeroSocio}
+                            className={`border-b ${
+                              socio.CuotasVencidas >= 5
+                                ? "bg-red-50 dark:bg-red-950/20"
+                                : socio.CuotasVencidas >= 3
+                                ? "bg-orange-50 dark:bg-orange-950/20"
+                                : ""
+                            }`}
+                          >
+                            <td className="p-2">{socio.NumeroSocio}</td>
+                            <td className="p-2">
+                              {socio.Nombre} {socio.Apellido}
+                            </td>
+                            <td className="p-2">{socio.Dni}</td>
+                            <td className="p-2">{socio.Telefono}</td>
+                            <td className="p-2">{socio.TipoMembresia}</td>
+                            <td className="p-2">
+                              <Badge
+                                variant={
+                                  socio.CuotasVencidas >= 5
+                                    ? "destructive"
+                                    : socio.CuotasVencidas >= 3
+                                    ? "default"
+                                    : "secondary"
+                                }
+                              >
+                                {socio.CuotasVencidas}
+                              </Badge>
+                            </td>
+                            <td className="p-2 font-semibold">
+                              ${socio.DeudaTotal.toFixed(2)}
+                            </td>
+                            <td className="p-2">{socio.DiasEnMora} días</td>
+                            <td className="p-2">
+                              <Badge
+                                variant={
+                                  socio.NivelRiesgo === "critico"
+                                    ? "destructive"
+                                    : socio.NivelRiesgo === "alto"
+                                    ? "default"
+                                    : "secondary"
+                                }
+                              >
+                                {socio.NivelRiesgo === "critico"
+                                  ? "🔴 Crítico"
+                                  : socio.NivelRiesgo === "alto"
+                                  ? "🟠 Alto"
+                                  : "🟡 Medio"}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {selectedReport === "arbitros-finanzas" && reportData.arbitros && (
+            <div className="space-y-6">
+              {/* Estadísticas */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Total Árbitros</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{reportData.estadisticas.totalArbitros}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Total Partidos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-blue-600">{reportData.estadisticas.totalPartidos}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Monto Pagado</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600">
+                      ${reportData.estadisticas.montoPagado}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {reportData.estadisticas.porcentajePagado}% del total
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Monto Pendiente</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-orange-600">
+                      ${reportData.estadisticas.montoPendiente}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Info adicional */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Partidos Finalizados</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl font-bold text-green-600">
+                      {reportData.estadisticas.partidosFinalizados}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Partidos Programados</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl font-bold text-blue-600">
+                      {reportData.estadisticas.partidosProgramados}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Tarifa Promedio</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl font-bold text-purple-600">
+                      ${reportData.estadisticas.tarifaPromedio}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Gráficos */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="arbitros-finanzas-charts">
+                {/* Distribución de Pagos */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Distribución de Pagos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie
+                          data={reportData.estadisticas.distribucionPagos}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {reportData.estadisticas.distribucionPagos.map((entry: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Gastos por Deporte */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Gastos por Deporte</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={reportData.estadisticas.porDeporte}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                        <Bar dataKey="gasto" fill="#14b8a6" name="Gasto" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Top 10 Árbitros por Gasto */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Top 10 Árbitros por Gasto</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart
+                        data={reportData.estadisticas.topArbitrosPorGasto}
+                        layout="vertical"
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" />
+                        <YAxis dataKey="name" type="category" width={120} />
+                        <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                        <Bar dataKey="value" fill="#0d9488" name="Monto Total" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Partidos por Estado */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Partidos por Estado</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart
+                        data={[
+                          { name: "Finalizados", value: reportData.estadisticas.partidosFinalizados, fill: "#10b981" },
+                          { name: "Programados", value: reportData.estadisticas.partidosProgramados, fill: "#3b82f6" },
+                        ]}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="value">
+                          <Cell fill="#10b981" />
+                          <Cell fill="#3b82f6" />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Tabla de Árbitros */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Detalle de Gastos por Árbitro</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Tarifa promedio: ${reportData.estadisticas.tarifaPromedio} por partido
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left p-2">Árbitro</th>
+                          <th className="text-left p-2">DNI</th>
+                          <th className="text-left p-2">Tarifa</th>
+                          <th className="text-left p-2">Total Partidos</th>
+                          <th className="text-left p-2">Finalizados</th>
+                          <th className="text-left p-2">Programados</th>
+                          <th className="text-left p-2">Monto Pagado</th>
+                          <th className="text-left p-2">Monto Pendiente</th>
+                          <th className="text-left p-2">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportData.arbitros.map((arbitro: any) => (
+                          <tr key={arbitro.IdArbitro} className="border-b hover:bg-gray-50 dark:hover:bg-gray-800">
+                            <td className="p-2">
+                              {arbitro.Nombre} {arbitro.Apellido}
+                            </td>
+                            <td className="p-2">{arbitro.Dni}</td>
+                            <td className="p-2 font-medium text-purple-600">
+                              ${arbitro.TarifaArbitro?.toFixed(2) || '50000.00'}
+                            </td>
+                            <td className="p-2 text-center">{arbitro.TotalPartidos}</td>
+                            <td className="p-2 text-center">
+                              <Badge variant="default">{arbitro.PartidosFinalizados}</Badge>
+                            </td>
+                            <td className="p-2 text-center">
+                              <Badge variant="secondary">{arbitro.PartidosProgramados}</Badge>
+                            </td>
+                            <td className="p-2 font-semibold text-green-600">
+                              ${arbitro.MontoPagado.toFixed(2)}
+                            </td>
+                            <td className="p-2 font-semibold text-orange-600">
+                              ${arbitro.MontoPendiente.toFixed(2)}
+                            </td>
+                            <td className="p-2 font-bold">
+                              ${arbitro.MontoTotal.toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {selectedReport === "estado-financiero" && reportData.estadisticas && (
+            <div className="space-y-6">
+              {/* Métricas Principales */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className={reportData.estadisticas.estado === "Positivo" ? "border-green-500" : "border-red-500"}>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Balance Total</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className={`text-3xl font-bold ${parseFloat(reportData.estadisticas.balance) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      ${reportData.estadisticas.balance}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Margen: {reportData.estadisticas.margenPorcentaje}%
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Total Ingresos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold text-green-600">
+                      ${reportData.estadisticas.totalIngresos}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {reportData.estadisticas.totalCuotasPagadas} cuotas pagadas
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Total Egresos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold text-red-600">
+                      ${reportData.estadisticas.totalEgresos}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {reportData.estadisticas.totalPartidosFinalizados} partidos finalizados
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Métricas Adicionales */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Promedio de Ingreso por Cuota</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl font-bold text-green-600">
+                      ${reportData.estadisticas.promedioIngreso}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Promedio de Egreso por Partido</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl font-bold text-red-600">
+                      ${reportData.estadisticas.promedioEgreso}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Gráficos */}
+              <div id="estado-financiero-charts" className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Comparación Ingresos vs Egresos */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Comparación General</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={reportData.estadisticas.comparacionGeneral}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={100}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {reportData.estadisticas.comparacionGeneral.map((entry: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Evolución Mensual */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Evolución Mensual</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={reportData.estadisticas.evolucionMensual}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                        <Legend />
+                        <Bar dataKey="ingresos" fill="#10b981" name="Ingresos" />
+                        <Bar dataKey="egresos" fill="#ef4444" name="Egresos" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Ingresos por Tipo de Membresía */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Ingresos por Tipo de Membresía</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={reportData.estadisticas.ingresosPorTipo}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={100}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {reportData.estadisticas.ingresosPorTipo.map((_: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Egresos por Deporte */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Egresos por Deporte</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={reportData.estadisticas.egresosPorDeporte}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                        <Bar dataKey="value" fill="#ef4444" name="Gasto" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Balance Mensual */}
+                <Card className="md:col-span-2">
+                  <CardHeader>
+                    <CardTitle className="text-base">Balance Mensual (Ingresos - Egresos)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={reportData.estadisticas.evolucionMensual}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                        <Bar dataKey="balance" name="Balance">
+                          {reportData.estadisticas.evolucionMensual.map((entry: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={entry.balance >= 0 ? '#10b981' : '#ef4444'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
+
           {selectedReport === "torneos" && reportData.torneos && (
             <div className="space-y-6">
               {/* Estadísticas */}
@@ -1609,6 +2577,27 @@ export default function GenerarReportesPage() {
                                   {tipo.Descripcion}
                                 </SelectItem>
                               ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      {/* Nivel de Riesgo (solo morosidad) */}
+                      {selectedReport === "morosidad" && (
+                        <div className="space-y-2">
+                          <Label>Nivel de Riesgo</Label>
+                          <Select
+                            value={filters.nivelRiesgo || "todos"}
+                            onValueChange={(value) => setFilters({ ...filters, nivelRiesgo: value })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Todos los niveles" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="todos">Todos los niveles</SelectItem>
+                              <SelectItem value="critico">🔴 Crítico (5+ cuotas)</SelectItem>
+                              <SelectItem value="alto">🟠 Alto (3-4 cuotas)</SelectItem>
+                              <SelectItem value="medio">🟡 Medio (1-2 cuotas)</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>

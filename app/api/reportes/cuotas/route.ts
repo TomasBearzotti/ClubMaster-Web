@@ -15,9 +15,10 @@ export async function GET(request: NextRequest) {
     let cuotasQuery = `
       SELECT 
         c.IdCuota,
-        s.IdSocio,
-        p.Nombre,
-        p.Apellido,
+        c.SocioId as IdSocio,
+        s.IdSocio as NumeroSocio,
+        p.Nombre as NombreSocio,
+        p.Apellido as ApellidoSocio,
         p.Dni,
         c.Mes,
         c.Anio,
@@ -27,22 +28,21 @@ export async function GET(request: NextRequest) {
         c.FechaPago,
         c.Estado,
         c.MetodoPago,
-        tm.Nombre as TipoMembresia
+        c.NumeroTransaccion,
+        tm.Descripcion as TipoMembresia
       FROM Cuotas c
-      INNER JOIN Socios s ON c.IdSocio = s.IdSocio
+      INNER JOIN Socios s ON c.SocioId = s.IdSocio
       INNER JOIN Personas p ON s.IdPersona = p.IdPersona
-      INNER JOIN TiposMembresia tm ON s.IdTipoMembresia = tm.IdTipoMembresia
+      INNER JOIN TiposMembresia tm ON s.TipoMembresiaId = tm.IdTipo
       WHERE 1=1
     `
 
-    const params: any[] = []
+    const request1 = pool.request()
 
     if (fechaInicio && fechaFin) {
       cuotasQuery += ` AND c.FechaVencimiento BETWEEN @FechaInicio AND @FechaFin`
-      params.push(
-        { name: "FechaInicio", type: sql.Date, value: new Date(fechaInicio) },
-        { name: "FechaFin", type: sql.Date, value: new Date(fechaFin) }
-      )
+      request1.input("FechaInicio", sql.Date, new Date(fechaInicio))
+      request1.input("FechaFin", sql.Date, new Date(fechaFin))
     }
 
     if (estado && estado !== "todos") {
@@ -55,34 +55,33 @@ export async function GET(request: NextRequest) {
         cuotasQuery += ` AND c.Estado = 0 AND c.FechaVencimiento < GETDATE()`
       } else {
         cuotasQuery += ` AND c.Estado = @Estado`
-        params.push({ name: "Estado", type: sql.Int, value: estadoMap[estado] })
+        request1.input("Estado", sql.Int, estadoMap[estado])
       }
     }
 
     cuotasQuery += ` ORDER BY c.FechaVencimiento DESC`
 
-    const request1 = pool.request()
-    params.forEach((param) => {
-      request1.input(param.name, param.type, param.value)
-    })
     const cuotasResult = await request1.query(cuotasQuery)
 
     // Estadísticas generales
+    const request2 = pool.request()
     let statsQuery = `
       SELECT 
         COUNT(*) as TotalCuotas,
         SUM(CASE WHEN c.Estado = 1 THEN 1 ELSE 0 END) as CuotasPagadas,
         SUM(CASE WHEN c.Estado = 0 THEN 1 ELSE 0 END) as CuotasPendientes,
         SUM(CASE WHEN c.Estado = 0 AND c.FechaVencimiento < GETDATE() THEN 1 ELSE 0 END) as CuotasVencidas,
-        SUM(CASE WHEN c.Estado = 1 THEN c.Monto + c.Recargo ELSE 0 END) as MontoRecaudado,
-        SUM(CASE WHEN c.Estado = 0 THEN c.Monto + c.Recargo ELSE 0 END) as MontoPendiente,
-        SUM(c.Recargo) as TotalRecargos
+        SUM(CASE WHEN c.Estado = 1 THEN c.Monto + ISNULL(c.Recargo, 0) ELSE 0 END) as MontoRecaudado,
+        SUM(CASE WHEN c.Estado = 0 THEN c.Monto + ISNULL(c.Recargo, 0) ELSE 0 END) as MontoPendiente,
+        SUM(ISNULL(c.Recargo, 0)) as TotalRecargos
       FROM Cuotas c
       WHERE 1=1
     `
 
     if (fechaInicio && fechaFin) {
       statsQuery += ` AND c.FechaVencimiento BETWEEN @FechaInicio AND @FechaFin`
+      request2.input("FechaInicio", sql.Date, new Date(fechaInicio))
+      request2.input("FechaFin", sql.Date, new Date(fechaFin))
     }
 
     if (estado && estado !== "todos") {
@@ -94,39 +93,36 @@ export async function GET(request: NextRequest) {
           pendiente: 0,
         }
         statsQuery += ` AND c.Estado = @Estado`
+        request2.input("Estado", sql.Int, estadoMap[estado])
       }
     }
 
-    const request2 = pool.request()
-    params.forEach((param) => {
-      request2.input(param.name, param.type, param.value)
-    })
     const statsResult = await request2.query(statsQuery)
 
     // Recaudación mensual
     let recaudacionQuery = `
       SELECT 
         FORMAT(DATEFROMPARTS(c.Anio, c.Mes, 1), 'yyyy-MM') as Mes,
-        SUM(CASE WHEN c.Estado = 1 THEN c.Monto + c.Recargo ELSE 0 END) as MontoRecaudado,
-        SUM(CASE WHEN c.Estado = 0 THEN c.Monto + c.Recargo ELSE 0 END) as MontoPendiente,
+        SUM(CASE WHEN c.Estado = 1 THEN c.Monto + ISNULL(c.Recargo, 0) ELSE 0 END) as MontoRecaudado,
+        SUM(CASE WHEN c.Estado = 0 THEN c.Monto + ISNULL(c.Recargo, 0) ELSE 0 END) as MontoPendiente,
         COUNT(CASE WHEN c.Estado = 1 THEN 1 END) as CuotasPagadas,
         COUNT(CASE WHEN c.Estado = 0 THEN 1 END) as CuotasPendientes
       FROM Cuotas c
       WHERE 1=1
     `
 
+    const request3 = pool.request()
+
     if (fechaInicio && fechaFin) {
       recaudacionQuery += ` AND c.FechaVencimiento BETWEEN @FechaInicio AND @FechaFin`
+      request3.input("FechaInicio", sql.Date, new Date(fechaInicio))
+      request3.input("FechaFin", sql.Date, new Date(fechaFin))
     } else {
       recaudacionQuery += ` AND DATEFROMPARTS(c.Anio, c.Mes, 1) >= DATEADD(MONTH, -6, GETDATE())`
     }
 
     recaudacionQuery += ` GROUP BY c.Anio, c.Mes ORDER BY c.Anio, c.Mes`
 
-    const request3 = pool.request()
-    params.forEach((param) => {
-      request3.input(param.name, param.type, param.value)
-    })
     const recaudacionResult = await request3.query(recaudacionQuery)
 
     // Métodos de pago
@@ -134,54 +130,76 @@ export async function GET(request: NextRequest) {
       SELECT 
         c.MetodoPago,
         COUNT(*) as Cantidad,
-        SUM(c.Monto + c.Recargo) as MontoTotal
+        SUM(c.Monto + ISNULL(c.Recargo, 0)) as MontoTotal
       FROM Cuotas c
       WHERE c.Estado = 1 AND c.MetodoPago IS NOT NULL
     `
 
+    const request4 = pool.request()
+
     if (fechaInicio && fechaFin) {
       metodosQuery += ` AND c.FechaVencimiento BETWEEN @FechaInicio AND @FechaFin`
+      request4.input("FechaInicio", sql.Date, new Date(fechaInicio))
+      request4.input("FechaFin", sql.Date, new Date(fechaFin))
     }
 
     metodosQuery += ` GROUP BY c.MetodoPago ORDER BY MontoTotal DESC`
 
-    const request4 = pool.request()
-    params.forEach((param) => {
-      request4.input(param.name, param.type, param.value)
-    })
     const metodosResult = await request4.query(metodosQuery)
 
     // Top 10 morosos
     let morososQuery = `
       SELECT TOP 10
-        s.IdSocio,
+        s.IdSocio as NumeroSocio,
         p.Nombre,
         p.Apellido,
         p.Dni,
         COUNT(*) as CuotasVencidas,
-        SUM(c.Monto + c.Recargo) as DeudaTotal
+        SUM(c.Monto + ISNULL(c.Recargo, 0)) as DeudaTotal
       FROM Cuotas c
-      INNER JOIN Socios s ON c.IdSocio = s.IdSocio
+      INNER JOIN Socios s ON c.SocioId = s.IdSocio
       INNER JOIN Personas p ON s.IdPersona = p.IdPersona
       WHERE c.Estado = 0 AND c.FechaVencimiento < GETDATE()
     `
 
+    const request5 = pool.request()
+
     if (fechaInicio && fechaFin) {
       morososQuery += ` AND c.FechaVencimiento BETWEEN @FechaInicio AND @FechaFin`
+      request5.input("FechaInicio", sql.Date, new Date(fechaInicio))
+      request5.input("FechaFin", sql.Date, new Date(fechaFin))
     }
 
     morososQuery += ` GROUP BY s.IdSocio, p.Nombre, p.Apellido, p.Dni ORDER BY DeudaTotal DESC`
 
-    const request5 = pool.request()
-    params.forEach((param) => {
-      request5.input(param.name, param.type, param.value)
-    })
     const morososResult = await request5.query(morososQuery)
+
+    const stats = statsResult.recordset[0]
+    const totalCuotas = stats.TotalCuotas || 0
+    const pagadas = stats.CuotasPagadas || 0
+    const pendientes = stats.CuotasPendientes || 0
+    const vencidas = stats.CuotasVencidas || 0
 
     return NextResponse.json({
       cuotas: cuotasResult.recordset,
-      estadisticas: statsResult.recordset[0],
-      recaudacion: recaudacionResult.recordset,
+      estadisticas: {
+        totalCuotas,
+        pagadas,
+        pendientes,
+        vencidas,
+        porcentajePagadas: totalCuotas > 0 ? (pagadas / totalCuotas) * 100 : 0,
+        porcentajePendientes: totalCuotas > 0 ? (pendientes / totalCuotas) * 100 : 0,
+        montoRecaudado: stats.MontoRecaudado || 0,
+        montoPendiente: stats.MontoPendiente || 0,
+        totalRecargos: stats.TotalRecargos || 0,
+        porMes: recaudacionResult.recordset.map((r: any) => ({
+          mes: r.Mes,
+          pagadas: r.CuotasPagadas || 0,
+          pendientes: r.CuotasPendientes || 0,
+          montoRecaudado: r.MontoRecaudado || 0,
+          montoPendiente: r.MontoPendiente || 0,
+        })),
+      },
       metodosPago: metodosResult.recordset,
       morosos: morososResult.recordset,
     })

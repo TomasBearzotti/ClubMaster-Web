@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getConnection } from "@/lib/sql-server"
 import sql from "mssql"
 
-// Tarifa estimada por partido (puede configurarse)
-const TARIFA_BASE_PARTIDO = 5000
+// Tarifa por defecto si el árbitro no tiene configurada
+const TARIFA_DEFECTO = 50000
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
       SELECT 
         a.IdArbitro,
         a.Estado,
+        a.Tarifa,
         p.Nombre,
         p.Apellido,
         p.Dni,
@@ -46,26 +47,36 @@ export async function GET(request: NextRequest) {
     }
 
     arbitrosQuery += `
-      GROUP BY a.IdArbitro, a.Estado, p.Nombre, p.Apellido, p.Dni, p.Mail
+      GROUP BY a.IdArbitro, a.Estado, a.Tarifa, p.Nombre, p.Apellido, p.Dni, p.Mail
       HAVING COUNT(part.IdPartido) > 0
       ORDER BY TotalPartidos DESC
     `
 
     const arbitrosResult = await request1.query(arbitrosQuery)
 
-    // Query para obtener distribución por deporte
+    // Query para obtener distribución por deporte con tarifas individuales
     let deporteQuery = `
       SELECT 
         d.Nombre as DeporteNombre,
         COUNT(part.IdPartido) as TotalPartidos,
-        COUNT(CASE WHEN part.EstadoPartido = 'Finalizado' THEN 1 END) as PartidosFinalizados
+        COUNT(CASE WHEN part.EstadoPartido = 'Finalizado' THEN 1 END) as PartidosFinalizados,
+        SUM(CASE 
+          WHEN part.EstadoPartido = 'Finalizado' THEN ISNULL(a.Tarifa, @tarifaDefecto)
+          ELSE 0 
+        END) as TotalGasto,
+        SUM(CASE 
+          WHEN part.EstadoPartido = 'Programado' OR part.EstadoPartido IS NULL THEN ISNULL(a.Tarifa, @tarifaDefecto)
+          ELSE 0 
+        END) as TotalPendiente
       FROM Partidos part
       INNER JOIN Torneos t ON part.TorneoId = t.IdTorneo
       INNER JOIN Deportes d ON t.IdDeporte = d.IdDeporte
+      LEFT JOIN Arbitros a ON part.ArbitroId = a.IdArbitro
       WHERE part.ArbitroId IS NOT NULL
     `
 
     const request2 = pool.request()
+    request2.input("tarifaDefecto", sql.Decimal(10, 2), TARIFA_DEFECTO)
 
     if (fechaInicio && fechaFin) {
       deporteQuery += ` AND part.FechaPartido BETWEEN @fechaInicio AND @fechaFin`
@@ -82,40 +93,49 @@ export async function GET(request: NextRequest) {
 
     const deporteResult = await request2.query(deporteQuery)
 
-    // Calcular gastos
-    const arbitrosConPagos = arbitrosResult.recordset.map((a: any) => ({
-      ...a,
-      MontoPagado: a.PartidosFinalizados * TARIFA_BASE_PARTIDO,
-      MontoPendiente: a.PartidosProgramados * TARIFA_BASE_PARTIDO,
-      MontoTotal: a.TotalPartidos * TARIFA_BASE_PARTIDO,
-    }))
+    // Calcular gastos usando la tarifa individual de cada árbitro
+    const arbitrosConPagos = arbitrosResult.recordset.map((a: any) => {
+      const tarifaArbitro = a.Tarifa || TARIFA_DEFECTO
+      return {
+        ...a,
+        TarifaArbitro: tarifaArbitro,
+        MontoPagado: a.PartidosFinalizados * tarifaArbitro,
+        MontoPendiente: a.PartidosProgramados * tarifaArbitro,
+        MontoTotal: a.TotalPartidos * tarifaArbitro,
+      }
+    })
 
-    // Estadísticas financieras
+    // Estadísticas financieras usando tarifas individuales
     const totalArbitros = arbitrosResult.recordset.length
-    const totalPartidos = arbitrosResult.recordset.reduce((acc: number, a: any) => acc + a.TotalPartidos, 0)
-    const partidosFinalizados = arbitrosResult.recordset.reduce(
+    const totalPartidos = arbitrosConPagos.reduce((acc: number, a: any) => acc + a.TotalPartidos, 0)
+    const partidosFinalizados = arbitrosConPagos.reduce(
       (acc: number, a: any) => acc + a.PartidosFinalizados,
       0
     )
-    const partidosProgramados = arbitrosResult.recordset.reduce(
+    const partidosProgramados = arbitrosConPagos.reduce(
       (acc: number, a: any) => acc + a.PartidosProgramados,
       0
     )
 
-    const montoPagado = partidosFinalizados * TARIFA_BASE_PARTIDO
-    const montoPendiente = partidosProgramados * TARIFA_BASE_PARTIDO
-    const montoTotal = totalPartidos * TARIFA_BASE_PARTIDO
+    const montoPagado = arbitrosConPagos.reduce((acc: number, a: any) => acc + a.MontoPagado, 0)
+    const montoPendiente = arbitrosConPagos.reduce((acc: number, a: any) => acc + a.MontoPendiente, 0)
+    const montoTotal = arbitrosConPagos.reduce((acc: number, a: any) => acc + a.MontoTotal, 0)
 
     // Porcentaje pagado
-    const porcentajePagado = totalPartidos > 0 ? ((partidosFinalizados / totalPartidos) * 100).toFixed(1) : "0"
+    const porcentajePagado = montoTotal > 0 ? ((montoPagado / montoTotal) * 100).toFixed(1) : "0"
+
+    // Tarifa promedio
+    const tarifaPromedio = totalArbitros > 0 
+      ? arbitrosConPagos.reduce((acc: number, a: any) => acc + a.TarifaArbitro, 0) / totalArbitros 
+      : TARIFA_DEFECTO
 
     // Distribución por deporte
     const porDeporte = deporteResult.recordset.map((d: any) => ({
       name: d.DeporteNombre,
       partidos: d.TotalPartidos,
-      gasto: d.PartidosFinalizados * TARIFA_BASE_PARTIDO,
-      pendiente: (d.TotalPartidos - d.PartidosFinalizados) * TARIFA_BASE_PARTIDO,
-      value: d.PartidosFinalizados * TARIFA_BASE_PARTIDO, // Para gráfico
+      gasto: parseFloat(d.TotalGasto || 0),
+      pendiente: parseFloat(d.TotalPendiente || 0),
+      value: parseFloat(d.TotalGasto || 0), // Para gráfico
     }))
 
     // Top árbitros por gasto
@@ -143,7 +163,7 @@ export async function GET(request: NextRequest) {
       montoPendiente: montoPendiente.toFixed(2),
       montoTotal: montoTotal.toFixed(2),
       porcentajePagado: parseFloat(porcentajePagado),
-      tarifaPorPartido: TARIFA_BASE_PARTIDO,
+      tarifaPromedio: tarifaPromedio.toFixed(2),
       porDeporte,
       topArbitrosPorGasto,
       distribucionPagos,
