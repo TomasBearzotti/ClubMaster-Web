@@ -76,32 +76,127 @@ export default function GenerarReportesPage() {
   const [torneos, setTorneos] = useState<any[]>([])
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null)
 
-  const reportTypes = [
+  const reportCategories = [
     {
-      id: "socios",
-      title: "Reporte de Socios",
-      description: "Información detallada de todos los socios del club",
-      icon: Users,
-      color: "bg-blue-500 hover:bg-blue-600",
-      filters: ["fechaInicio", "fechaFin", "estado", "tipoMembresia"],
+      id: "socios-membresias",
+      title: "📋 Socios y Membresías",
+      description: "Gestión de la base de socios del club",
+      reports: [
+        {
+          id: "socios",
+          title: "Reporte de Socios",
+          description: "Información detallada de todos los socios del club",
+          icon: Users,
+          color: "bg-blue-500 hover:bg-blue-600",
+          filters: ["fechaInicio", "fechaFin", "estado", "tipoMembresia"],
+        },
+        {
+          id: "retencion-membresias",
+          title: "Retención y Membresías",
+          description: "Análisis de altas, bajas y distribución de membresías",
+          icon: BarChart3,
+          color: "bg-blue-600 hover:bg-blue-700",
+          filters: ["fechaInicio", "fechaFin", "tipoMembresia"],
+        },
+      ],
     },
     {
-      id: "cuotas",
-      title: "Reporte de Cuotas",
-      description: "Estado de pagos y cuotas de los socios",
-      icon: CreditCard,
-      color: "bg-green-500 hover:bg-green-600",
-      filters: ["fechaInicio", "fechaFin", "estado"],
+      id: "finanzas",
+      title: "💰 Finanzas",
+      description: "Control económico y flujo de caja",
+      reports: [
+        {
+          id: "cuotas",
+          title: "Reporte de Cuotas",
+          description: "Estado de pagos y cuotas de los socios",
+          icon: CreditCard,
+          color: "bg-green-500 hover:bg-green-600",
+          filters: ["fechaInicio", "fechaFin", "estado"],
+        },
+        {
+          id: "morosidad",
+          title: "Reporte de Morosidad",
+          description: "Análisis de deudas y socios morosos",
+          icon: CreditCard,
+          color: "bg-red-500 hover:bg-red-600",
+          filters: ["antiguedadDeuda", "montoMinimo", "tipoMembresia"],
+        },
+        {
+          id: "arbitros-finanzas",
+          title: "Gastos de Árbitros",
+          description: "Pagos y gastos de árbitros por período",
+          icon: CreditCard,
+          color: "bg-teal-500 hover:bg-teal-600",
+          filters: ["fechaInicio", "fechaFin", "deporte"],
+        },
+        {
+          id: "proyeccion-financiera",
+          title: "Proyección Financiera",
+          description: "Estimación de ingresos y gastos futuros",
+          icon: BarChart3,
+          color: "bg-emerald-500 hover:bg-emerald-600",
+          filters: ["periodoProyeccion", "escenario"],
+        },
+      ],
     },
     {
-      id: "torneos",
-      title: "Reporte de Torneos",
-      description: "Estadísticas y resultados de torneos",
-      icon: Trophy,
-      color: "bg-yellow-500 hover:bg-yellow-600",
-      filters: ["fechaInicio", "fechaFin", "estado", "deporte", "torneo"],
+      id: "deportes-competencias",
+      title: "🏆 Deportes y Competencias",
+      description: "Gestión deportiva y eventos",
+      reports: [
+        {
+          id: "torneos",
+          title: "Reporte de Torneos",
+          description: "Estadísticas y rendimiento de torneos",
+          icon: Trophy,
+          color: "bg-yellow-500 hover:bg-yellow-600",
+          filters: ["fechaInicio", "fechaFin", "estado", "deporte", "torneo"],
+        },
+        {
+          id: "equipos-participacion",
+          title: "Equipos y Participación",
+          description: "Análisis de equipos y participación de socios",
+          icon: Users,
+          color: "bg-orange-500 hover:bg-orange-600",
+          filters: ["deporte", "estadoEquipo", "torneo"],
+        },
+        {
+          id: "actividad-deporte",
+          title: "Actividad por Deporte",
+          description: "Métricas y tendencias por disciplina deportiva",
+          icon: Trophy,
+          color: "bg-amber-500 hover:bg-amber-600",
+          filters: ["deporte", "fechaInicio", "fechaFin", "incluirHistorico"],
+        },
+        {
+          id: "arbitros-partidos",
+          title: "Árbitros y Partidos",
+          description: "Estadísticas de árbitros y partidos arbitrados",
+          icon: Users,
+          color: "bg-indigo-500 hover:bg-indigo-600",
+          filters: ["fechaInicio", "fechaFin", "estado", "deporte"],
+        },
+      ],
+    },
+    {
+      id: "analisis-tendencias",
+      title: "📈 Análisis y Tendencias",
+      description: "Toma de decisiones estratégicas",
+      reports: [
+        {
+          id: "comparativo-periodos",
+          title: "Comparativo de Períodos",
+          description: "Comparación de métricas entre diferentes períodos",
+          icon: BarChart3,
+          color: "bg-purple-500 hover:bg-purple-600",
+          filters: ["tipoComparacion", "periodo1", "periodo2", "metricas"],
+        },
+      ],
     },
   ]
+
+  // Aplanar todos los reportes para mantener compatibilidad
+  const reportTypes = reportCategories.flatMap((cat) => cat.reports)
 
   useEffect(() => {
     if (activeTab === "guardados") {
@@ -312,6 +407,76 @@ export default function GenerarReportesPage() {
         startY: yPos,
         head: [["N° Socio", "Nombre", "Membresía", "Estado", "Email", "Teléfono"]],
         body: sociosData,
+        theme: "striped",
+        headStyles: { fillColor: [59, 130, 246] },
+      })
+    } else if (selectedReport === "retencion-membresias" && reportData?.estadisticas) {
+      // Estadísticas
+      const stats = reportData.estadisticas
+      doc.setFontSize(14)
+      doc.text("Estadísticas de Retención y Membresías", 14, yPos)
+      yPos += 10
+
+      doc.setFontSize(10)
+      doc.text(`Total de Socios: ${stats.totalSocios}`, 20, yPos)
+      yPos += 6
+      doc.text(`Tasa de Retención: ${stats.tasaRetencion}%`, 20, yPos)
+      yPos += 6
+      doc.text(`Socios Activos: ${stats.activos}`, 20, yPos)
+      yPos += 6
+      doc.text(`Ingresos Potenciales Mensuales: $${stats.ingresosPotenciales}`, 20, yPos)
+      yPos += 6
+      doc.text(
+        `Altas: ${stats.altasYBajas.altas} | Bajas: ${stats.altasYBajas.bajas} | Neto: ${stats.altasYBajas.neto}`,
+        20,
+        yPos
+      )
+      yPos += 15
+
+      // Capturar gráficos
+      const chartsElement = document.getElementById("retencion-membresias-charts")
+      if (chartsElement) {
+        try {
+          const canvas = await html2canvas(chartsElement, {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+          })
+          const imgData = canvas.toDataURL("image/png")
+          const imgWidth = 180
+          const imgHeight = (canvas.height * imgWidth) / canvas.width
+
+          // Verificar si necesitamos una nueva página
+          if (yPos + imgHeight > 280) {
+            doc.addPage()
+            yPos = 20
+          }
+
+          doc.addImage(imgData, "PNG", 14, yPos, imgWidth, imgHeight)
+          yPos += imgHeight + 10
+        } catch (error) {
+          console.error("Error capturando gráficos:", error)
+        }
+      }
+
+      // Verificar si necesitamos una nueva página para la tabla
+      if (yPos > 200) {
+        doc.addPage()
+        yPos = 20
+      }
+
+      // Tabla de membresías
+      const membresiasData = stats.porMembresia.map((m: any) => [
+        m.name,
+        m.cantidad,
+        `${m.porcentaje}%`,
+        `$${m.ingresoMensual}`,
+      ])
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [["Tipo de Membresía", "Cantidad", "Porcentaje", "Ingreso Mensual"]],
+        body: membresiasData,
         theme: "striped",
         headStyles: { fillColor: [59, 130, 246] },
       })
@@ -694,6 +859,199 @@ export default function GenerarReportesPage() {
             </div>
           )}
 
+          {selectedReport === "retencion-membresias" && reportData.socios && reportData.estadisticas && (
+            <div className="space-y-6">
+              {/* Métricas Clave */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Total Socios</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{reportData.estadisticas.totalSocios}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Tasa de Retención</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600">{reportData.estadisticas.tasaRetencion}%</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Ingresos Potenciales</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-blue-600">${reportData.estadisticas.ingresosPotenciales}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Mensual</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Socios Activos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-emerald-600">{reportData.estadisticas.activos}</div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Gráficos Principales */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="retencion-membresias-charts">
+                {/* Distribución por Membresía */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Distribución por Tipo de Membresía</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie
+                          data={reportData.estadisticas.porMembresia}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, porcentaje }) => `${name}: ${porcentaje}%`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {reportData.estadisticas.porMembresia.map((_: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Antigüedad de Socios */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Antigüedad de Socios Activos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={reportData.estadisticas.porAntiguedad}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#3b82f6" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Estado de Socios */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Estado de Socios</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie
+                          data={reportData.estadisticas.porEstado}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {reportData.estadisticas.porEstado.map((_: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Altas y Bajas */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Altas y Bajas del Período</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart
+                        data={[
+                          { name: "Altas", value: reportData.estadisticas.altasYBajas.altas, fill: "#10b981" },
+                          { name: "Bajas", value: reportData.estadisticas.altasYBajas.bajas, fill: "#ef4444" },
+                          {
+                            name: "Neto",
+                            value: Math.abs(reportData.estadisticas.altasYBajas.neto),
+                            fill: reportData.estadisticas.altasYBajas.neto >= 0 ? "#3b82f6" : "#f59e0b",
+                          },
+                        ]}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="value">
+                          {[
+                            { name: "Altas", value: reportData.estadisticas.altasYBajas.altas, fill: "#10b981" },
+                            { name: "Bajas", value: reportData.estadisticas.altasYBajas.bajas, fill: "#ef4444" },
+                            {
+                              name: "Neto",
+                              value: Math.abs(reportData.estadisticas.altasYBajas.neto),
+                              fill: reportData.estadisticas.altasYBajas.neto >= 0 ? "#3b82f6" : "#f59e0b",
+                            },
+                          ].map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Tabla de Membresías */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Detalle por Tipo de Membresía</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="relative w-full overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Tipo de Membresía</TableHead>
+                          <TableHead>Cantidad de Socios</TableHead>
+                          <TableHead>Porcentaje</TableHead>
+                          <TableHead>Ingreso Mensual</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reportData.estadisticas.porMembresia.map((membresia: any, index: number) => (
+                          <TableRow key={index}>
+                            <TableCell className="font-medium">{membresia.name}</TableCell>
+                            <TableCell>{membresia.cantidad}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{membresia.porcentaje}%</Badge>
+                            </TableCell>
+                            <TableCell className="text-green-600 font-semibold">
+                              ${membresia.ingresoMensual}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {selectedReport === "cuotas" && reportData.cuotas && (
             <div className="space-y-6">
               {/* Estadísticas */}
@@ -1028,37 +1386,112 @@ export default function GenerarReportesPage() {
           </TabsList>
 
           <TabsContent value="generar" className="space-y-6">
-            {/* Tipos de Reportes */}
+            {/* Tipos de Reportes Organizados por Categorías */}
             {!selectedReport && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {reportTypes.map((report) => {
-                  const IconComponent = report.icon
-                  return (
-                    <Card
-                      key={report.id}
-                      className="hover:shadow-lg transition-shadow duration-200 cursor-pointer group"
-                      onClick={() => handleSelectReport(report.id)}
-                    >
-                      <CardHeader className="text-center pb-4">
-                        <div
-                          className={`w-16 h-16 mx-auto rounded-full ${report.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-200`}
-                        >
-                          <IconComponent className="h-8 w-8 text-white" />
-                        </div>
-                        <CardTitle className="text-xl font-semibold text-gray-900">{report.title}</CardTitle>
-                        <CardDescription className="text-gray-600">{report.description}</CardDescription>
+              <div className="space-y-6">
+                {/* Primera fila: Socios y Análisis */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {reportCategories.slice(0, 1).map((category) => (
+                    <Card key={category.id} className="border-2 flex flex-col lg:col-span-2">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-xl font-bold text-gray-900">{category.title}</CardTitle>
+                        <CardDescription className="text-sm text-gray-600">{category.description}</CardDescription>
                       </CardHeader>
-                      <CardContent className="pt-0">
-                        <Button
-                          className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300"
-                          variant="outline"
-                        >
-                          Seleccionar
-                        </Button>
+                      <CardContent className="flex-1">
+                        <div className="space-y-3 h-full flex flex-col justify-start">
+                          {category.reports.map((report) => {
+                            const IconComponent = report.icon
+                            return (
+                              <div
+                                key={report.id}
+                                className="flex items-center gap-3 p-3 rounded-lg border-2 hover:border-gray-400 hover:shadow-md transition-all duration-200 cursor-pointer group bg-white"
+                                onClick={() => handleSelectReport(report.id)}
+                              >
+                                <div
+                                  className={`w-10 h-10 rounded-lg ${report.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}
+                                >
+                                  <IconComponent className="h-5 w-5 text-white" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="text-sm font-semibold text-gray-900 mb-0.5">{report.title}</h3>
+                                  <p className="text-xs text-gray-600 line-clamp-1">{report.description}</p>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </CardContent>
                     </Card>
-                  )
-                })}
+                  ))}
+                  {reportCategories.slice(3, 4).map((category) => (
+                    <Card key={category.id} className="border-2 flex flex-col">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-xl font-bold text-gray-900">{category.title}</CardTitle>
+                        <CardDescription className="text-sm text-gray-600">{category.description}</CardDescription>
+                      </CardHeader>
+                      <CardContent className="flex-1">
+                        <div className="space-y-3 h-full flex flex-col justify-start">
+                          {category.reports.map((report) => {
+                            const IconComponent = report.icon
+                            return (
+                              <div
+                                key={report.id}
+                                className="flex items-start gap-3 p-3 rounded-lg border-2 hover:border-gray-400 hover:shadow-md transition-all duration-200 cursor-pointer group bg-white"
+                                onClick={() => handleSelectReport(report.id)}
+                              >
+                                <div
+                                  className={`w-10 h-10 rounded-lg ${report.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}
+                                >
+                                  <IconComponent className="h-5 w-5 text-white" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="text-sm font-semibold text-gray-900 mb-0.5">{report.title}</h3>
+                                  <p className="text-xs text-gray-600 line-clamp-2">{report.description}</p>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Segunda fila: Finanzas y Deportes */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {reportCategories.slice(1, 3).map((category) => (
+                  <Card key={category.id} className="border-2 flex flex-col">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-xl font-bold text-gray-900">{category.title}</CardTitle>
+                      <CardDescription className="text-sm text-gray-600">{category.description}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex-1">
+                      <div className="space-y-3 h-full flex flex-col justify-start">
+                        {category.reports.map((report) => {
+                          const IconComponent = report.icon
+                          return (
+                            <div
+                              key={report.id}
+                              className="flex items-center gap-3 p-3 rounded-lg border-2 hover:border-gray-400 hover:shadow-md transition-all duration-200 cursor-pointer group bg-white"
+                              onClick={() => handleSelectReport(report.id)}
+                            >
+                              <div
+                                className={`w-10 h-10 rounded-lg ${report.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}
+                              >
+                                <IconComponent className="h-5 w-5 text-white" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-semibold text-gray-900 mb-0.5">{report.title}</h3>
+                                <p className="text-xs text-gray-600 line-clamp-1">{report.description}</p>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                </div>
               </div>
             )}
 
