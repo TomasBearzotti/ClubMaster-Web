@@ -468,14 +468,24 @@ export default function LoginPage() {
                 </Dialog>
               </div>
             </form>
-            <div className="mt-6 text-center text-sm">
-              <span className="text-gray-600">¿No tenés cuenta? </span>
-              <Link
-                href="/registro"
-                className="text-blue-600 hover:text-blue-800 hover:underline"
-              >
-                Crear cuenta
-              </Link>
+            <div className="mt-6 space-y-3">
+              <div className="text-center text-sm">
+                <Link
+                  href="/recuperar-cuenta"
+                  className="text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  ¿Olvidaste tu contraseña?
+                </Link>
+              </div>
+              <div className="text-center text-sm">
+                <span className="text-gray-600">¿No tenés cuenta? </span>
+                <Link
+                  href="/registro"
+                  className="text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  Crear cuenta
+                </Link>
+              </div>
             </div>
           </CardContent>
         </Card>

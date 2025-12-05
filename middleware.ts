@@ -5,7 +5,11 @@ import type { NextRequest } from "next/server";
 const PUBLIC_PATHS = [
   "/",
   "/registro",
+  "/recuperar-cuenta",
+  "/denegado",
   "/api/seguridad/login",
+  "/api/seguridad/verificar-email",
+  "/api/seguridad/recuperar-contrasena",
   "/api/seguridad/roles/logged",
 ];
 
@@ -92,6 +96,7 @@ export function middleware(request: NextRequest) {
 // Configuración: aplicar middleware a todas las rutas privadas
 export const config = {
   matcher: [
+    // Admin
     "/dashboard/:path*",
     "/usuarios/:path*",
     "/socios/:path*",
@@ -99,10 +104,16 @@ export const config = {
     "/torneos/:path*",
     "/arbitros/:path*",
     "/reportes/:path*",
+    
+    // Socio
     "/socio-dashboard/:path*",
-    "/arbitro-dashboard/:path*",
     "/socio/:path*",
+    
+    // Árbitro
+    "/arbitro-dashboard/:path*",
     "/arbitro/:path*",
+    
+    // Compartidas (requieren login pero no permiso específico)
     "/partidos/:path*",
     "/cuenta/:path*",
   ],
