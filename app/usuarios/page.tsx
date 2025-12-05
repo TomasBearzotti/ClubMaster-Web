@@ -167,6 +167,10 @@ export default function UsuariosPage() {
     permisos: [] as number[],
   });
 
+  // Paginación usuarios
+  const [currentPageUsers, setCurrentPageUsers] = useState(1);
+  const [itemsPerPageUsers, setItemsPerPageUsers] = useState(20);
+
   useEffect(() => {
     const init = async () => {
       try {
@@ -518,11 +522,16 @@ export default function UsuariosPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {usuarios
-                      .filter((u) =>
+                    {(() => {
+                      const filteredUsers = usuarios.filter((u) =>
                         u.email.toLowerCase().includes(searchUser.toLowerCase())
-                      )
-                      .map((u) => (
+                      );
+                      const totalUsers = filteredUsers.length;
+                      const startIndex = (currentPageUsers - 1) * itemsPerPageUsers;
+                      const endIndex = startIndex + itemsPerPageUsers;
+                      const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
+
+                      return paginatedUsers.map((u) => (
                         <>
                           {/* Fila principal */}
                           <>
@@ -724,9 +733,66 @@ export default function UsuariosPage() {
                             )}
                           </>
                         </>
-                      ))}
+                      ));
+                    })()}
                   </TableBody>
                 </Table>
+
+                {/* Paginación Usuarios */}
+                {(() => {
+                  const filteredUsers = usuarios.filter((u) =>
+                    u.email.toLowerCase().includes(searchUser.toLowerCase())
+                  );
+                  const totalUsers = filteredUsers.length;
+                  const totalPages = Math.ceil(totalUsers / itemsPerPageUsers);
+
+                  if (totalUsers === 0) return null;
+
+                  return (
+                    <div className="flex items-center justify-between mt-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">
+                          Mostrando {Math.min((currentPageUsers - 1) * itemsPerPageUsers + 1, totalUsers)} -{" "}
+                          {Math.min(currentPageUsers * itemsPerPageUsers, totalUsers)} de {totalUsers}
+                        </span>
+                        <select
+                          value={itemsPerPageUsers}
+                          onChange={(e) => {
+                            setItemsPerPageUsers(Number(e.target.value));
+                            setCurrentPageUsers(1);
+                          }}
+                          className="border rounded px-2 py-1 text-sm"
+                        >
+                          <option value={10}>10 por página</option>
+                          <option value={20}>20 por página</option>
+                          <option value={50}>50 por página</option>
+                          <option value={100}>100 por página</option>
+                        </select>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPageUsers((p) => Math.max(1, p - 1))}
+                          disabled={currentPageUsers === 1}
+                        >
+                          Anterior
+                        </Button>
+                        <span className="px-3 py-1 text-sm">
+                          Página {currentPageUsers} de {totalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPageUsers((p) => Math.min(totalPages, p + 1))}
+                          disabled={currentPageUsers === totalPages}
+                        >
+                          Siguiente
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           </TabsContent>
