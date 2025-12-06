@@ -23,6 +23,7 @@ const PERMISOS_RUTAS: Record<string, string> = {
   "/arbitros": "GESTION_ARBITROS",
   "/reportes": "REPORTES",
   "/dashboard": "DASHBOARD_ADMIN",
+  "/backups": "GESTION_BACKUPS",
 
   // Socio
   "/socio-dashboard": "DASHBOARD_SOCIO",
@@ -104,6 +105,7 @@ export const config = {
     "/torneos/:path*",
     "/arbitros/:path*",
     "/reportes/:path*",
+    "/backups/:path*",
     
     // Socio
     "/socio-dashboard/:path*",

@@ -476,11 +476,20 @@ export default function UsuariosPage() {
           Roles
         </h2>
         <Tabs defaultValue="usuarios">
-          <TabsList className="mb-6">
-            <TabsTrigger value="usuarios">Usuarios</TabsTrigger>
-            <TabsTrigger value="roles">Roles</TabsTrigger>
-            <TabsTrigger value="permisos">Permisos</TabsTrigger>
-          </TabsList>
+          <div className="flex items-center justify-between mb-6">
+            <TabsList>
+              <TabsTrigger value="usuarios">Usuarios</TabsTrigger>
+              <TabsTrigger value="roles">Roles</TabsTrigger>
+              <TabsTrigger value="permisos">Permisos</TabsTrigger>
+            </TabsList>
+            <Button
+              variant="outline"
+              onClick={() => router.push("/backups")}
+              className="gap-2"
+            >
+              🔒 Gestión de Backups
+            </Button>
+          </div>
           {/* Usuarios */}
           <TabsContent value="usuarios">
             <Card>
