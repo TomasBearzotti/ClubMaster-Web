@@ -51,6 +51,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import FacturaRecibo from "@/components/FacturaRecibo";
 
 interface Cuota {
   IdCuota: number;
@@ -60,6 +61,9 @@ interface Cuota {
   FechaVencimiento: string;
   Estado: number; // 0: Pendiente, 1: Pagada
   FechaPago?: string;
+  DNI?: string;
+  Direccion?: string;
+  TipoMembresia?: string;
 }
 
 interface EstadisticasCuotas {
@@ -79,6 +83,8 @@ export default function GestionCuotasPage() {
   const [mesSeleccionado, setMesSeleccionado] = useState<string>("todos");
   const [paginaActual, setPaginaActual] = useState(1);
   const [itemsPorPagina, setItemsPorPagina] = useState(20);
+  const [cuotaSeleccionada, setCuotaSeleccionada] = useState<Cuota | null>(null);
+  const [mostrarFactura, setMostrarFactura] = useState(false);
   const [estadisticas, setEstadisticas] = useState<EstadisticasCuotas>({
     totalCuotas: 0,
     cuotasPagadas: 0,
@@ -642,8 +648,16 @@ export default function GestionCuotasPage() {
                         {getEstadoBadge(cuota.Estado, cuota.FechaVencimiento)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="outline" size="sm">
-                          Ver Detalle
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            setCuotaSeleccionada(cuota);
+                            setMostrarFactura(true);
+                          }}
+                        >
+                          <FileText className="h-4 w-4 mr-1" />
+                          {cuota.Estado === 1 ? "Ver Recibo" : "Ver Factura"}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -724,6 +738,18 @@ export default function GestionCuotasPage() {
           </CardContent>
         </Card>
       </main>
+
+      {/* Modal de Factura/Recibo */}
+      {cuotaSeleccionada && (
+        <FacturaRecibo
+          open={mostrarFactura}
+          onClose={() => {
+            setMostrarFactura(false);
+            setCuotaSeleccionada(null);
+          }}
+          cuota={cuotaSeleccionada}
+        />
+      )}
     </div>
   );
 }

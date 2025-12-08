@@ -42,6 +42,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import FacturaRecibo from "@/components/FacturaRecibo";
 
 interface Cuota {
   IdCuota: number;
@@ -53,6 +54,10 @@ interface Cuota {
   FechaPago?: string;
   Periodo: string;
   Recargo?: number;
+  NombreSocio: string;
+  DNI?: string;
+  Email?: string;
+  TipoMembresia?: string;
 }
 
 interface CalculoRecargo {
@@ -79,6 +84,8 @@ export default function MisCuotasPage() {
   );
   const [metodoPago, setMetodoPago] = useState("");
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [cuotaSeleccionada, setCuotaSeleccionada] = useState<Cuota | null>(null);
+  const [mostrarFactura, setMostrarFactura] = useState(false);
 
   // Cargar cuotas del socio logueado
   useEffect(() => {
@@ -126,7 +133,25 @@ export default function MisCuotasPage() {
     try {
       const response = await fetch(`/api/cuotas?socioId=${socioId}`);
       if (response.ok) {
-        const data = await response.json();
+        let data = await response.json();
+        
+        // Obtener datos completos del socio para las facturas
+        const sociosRes = await fetch("/api/socios", { cache: "no-store" });
+        if (sociosRes.ok) {
+          const socios = await sociosRes.json();
+          const socio = socios.find((s: any) => s.IdSocio === socioId);
+          if (socio) {
+            const nombreCompleto = `${socio.Nombre || ""} ${socio.Apellido || ""}`.trim() || "Socio";
+            data = data.map((cuota: Cuota) => ({
+              ...cuota,
+              NombreSocio: nombreCompleto,
+              DNI: socio.DNI || "",
+              Email: socio.Email || "",
+              TipoMembresia: socio.TipoMembresia || "Estándar",
+            }));
+          }
+        }
+        
         setCuotas(data);
       } else {
         toast({
@@ -486,21 +511,29 @@ export default function MisCuotasPage() {
                         : "-"}
                     </TableCell>
                     <TableCell className="text-center">
-                      {cuota.Estado === 0 ? (
+                      <div className="flex items-center justify-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handlePagarCuota(cuota)}
+                          onClick={() => {
+                            setCuotaSeleccionada(cuota);
+                            setMostrarFactura(true);
+                          }}
                         >
-                          <DollarSign className="h-4 w-4 mr-1" />
-                          Pagar
+                          <FileText className="h-4 w-4 mr-1" />
+                          {cuota.Estado === 1 ? "Ver Recibo" : "Ver Factura"}
                         </Button>
-                      ) : (
-                        <Button variant="outline" size="sm">
-                          <Download className="h-4 w-4 mr-1" />
-                          Comprobante
-                        </Button>
-                      )}
+                        {cuota.Estado === 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePagarCuota(cuota)}
+                          >
+                            <DollarSign className="h-4 w-4 mr-1" />
+                            Pagar
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -601,6 +634,18 @@ export default function MisCuotasPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Modal de Factura/Recibo */}
+        {cuotaSeleccionada && (
+          <FacturaRecibo
+            open={mostrarFactura}
+            onClose={() => {
+              setMostrarFactura(false);
+              setCuotaSeleccionada(null);
+            }}
+            cuota={cuotaSeleccionada}
+          />
+        )}
       </main>
     </div>
   );
