@@ -23,6 +23,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
+import FacturaArbitro from "@/components/FacturaArbitro"
 
 interface Factura {
   IdFactura: number
@@ -39,6 +40,8 @@ interface Factura {
   NombreTorneo: string
   EquipoA?: string
   EquipoB?: string
+  DNI?: string
+  Email?: string
 }
 
 export default function FacturacionArbitrosPage() {
@@ -53,6 +56,8 @@ export default function FacturacionArbitrosPage() {
   const [isPagoModalOpen, setIsPagoModalOpen] = useState(false)
   const [metodoPago, setMetodoPago] = useState<string>("")
   const [processingPago, setProcessingPago] = useState(false)
+  const [facturaSeleccionada, setFacturaSeleccionada] = useState<Factura | null>(null)
+  const [mostrarFactura, setMostrarFactura] = useState(false)
 
   useEffect(() => {
     fetchFacturas()
@@ -66,7 +71,25 @@ export default function FacturacionArbitrosPage() {
       if (!response.ok) {
         throw new Error(`Error al cargar facturas: ${response.status}`)
       }
-      const data: Factura[] = await response.json()
+      let data: Factura[] = await response.json()
+      
+      // Obtener datos adicionales de los árbitros
+      const arbitrosRes = await fetch("/api/arbitros")
+      if (arbitrosRes.ok) {
+        const arbitros = await arbitrosRes.json()
+        data = data.map((factura) => {
+          const arbitro = arbitros.find((a: any) => a.IdArbitro === factura.IdArbitro)
+          if (arbitro) {
+            return {
+              ...factura,
+              DNI: arbitro.DNI || "",
+              Email: arbitro.Email || "",
+            }
+          }
+          return factura
+        })
+      }
+      
       setFacturas(data)
     } catch (error: any) {
       console.error("Error fetching facturas:", error)
@@ -389,6 +412,16 @@ export default function FacturacionArbitrosPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setFacturaSeleccionada(factura)
+                              setMostrarFactura(true)
+                            }}
+                          >
+                            {factura.Estado === 2 ? "Ver Recibo" : "Ver Factura"}
+                          </Button>
                           {factura.Estado === 1 && (
                             <Button size="sm" onClick={() => handlePagar(factura)} className="bg-green-600 hover:bg-green-700">
                               Pagar
@@ -403,11 +436,6 @@ export default function FacturacionArbitrosPage() {
                             >
                               Cancelar
                             </Button>
-                          )}
-                          {factura.Estado === 2 && (
-                            <Badge variant="outline" className="text-green-600">
-                              {factura.MetodoPago}
-                            </Badge>
                           )}
                         </div>
                       </TableCell>
@@ -479,6 +507,18 @@ export default function FacturacionArbitrosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Factura/Recibo */}
+      {facturaSeleccionada && (
+        <FacturaArbitro
+          open={mostrarFactura}
+          onClose={() => {
+            setMostrarFactura(false)
+            setFacturaSeleccionada(null)
+          }}
+          factura={facturaSeleccionada}
+        />
+      )}
     </div>
   )
 }

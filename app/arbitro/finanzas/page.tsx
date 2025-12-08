@@ -49,6 +49,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import FacturaArbitro from "@/components/FacturaArbitro";
 
 interface Factura {
   IdFactura: number;
@@ -65,6 +66,8 @@ interface Factura {
   NombreTorneo: string;
   EquipoA?: string;
   EquipoB?: string;
+  DNI?: string;
+  Email?: string;
 }
 
 interface ComprobanteData {
@@ -99,9 +102,9 @@ export default function FinanzasPage() {
   const [estadoFiltro, setEstadoFiltro] = useState<string>("todos");
   const [idArbitro, setIdArbitro] = useState<number | null>(null);
 
-  // Estados para modal de detalle
-  const [selectedFactura, setSelectedFactura] = useState<Factura | null>(null);
-  const [isDetalleOpen, setIsDetalleOpen] = useState(false);
+  // Estados para modal de factura
+  const [facturaSeleccionada, setFacturaSeleccionada] = useState<Factura | null>(null);
+  const [mostrarFactura, setMostrarFactura] = useState(false);
 
   // Estados para comprobante
   const [comprobante, setComprobante] = useState<ComprobanteData | null>(null);
@@ -186,7 +189,22 @@ export default function FinanzasPage() {
     try {
       const response = await fetch(`/api/arbitros/facturacion?arbitroId=${idArbitro}`);
       if (response.ok) {
-        const data: Factura[] = await response.json();
+        let data: Factura[] = await response.json();
+        
+        // Obtener datos adicionales del árbitro
+        const arbitrosRes = await fetch("/api/arbitros");
+        if (arbitrosRes.ok) {
+          const arbitros = await arbitrosRes.json();
+          const arbitro = arbitros.find((a: any) => a.IdArbitro === idArbitro);
+          if (arbitro) {
+            data = data.map((factura) => ({
+              ...factura,
+              DNI: arbitro.DNI || "",
+              Email: arbitro.Email || "",
+            }));
+          }
+        }
+        
         setFacturas(data);
       } else {
         toast({
@@ -248,11 +266,6 @@ export default function FinanzasPage() {
     } finally {
       setLoadingComprobante(false);
     }
-  };
-
-  const handleVerDetalle = (factura: Factura) => {
-    setSelectedFactura(factura);
-    setIsDetalleOpen(true);
   };
 
   const getEstadoBadge = (estado: number) => {
@@ -512,31 +525,16 @@ export default function FinanzasPage() {
                           </TableCell>
                           <TableCell>{getEstadoBadge(factura.Estado)}</TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleVerDetalle(factura)}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              {factura.Estado === 2 && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() =>
-                                    handleDescargarComprobante(factura)
-                                  }
-                                  disabled={loadingComprobante}
-                                >
-                                  {loadingComprobante ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Download className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              )}
-                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setFacturaSeleccionada(factura);
+                                setMostrarFactura(true);
+                              }}
+                            >
+                              {factura.Estado === 2 ? "Ver Recibo" : "Ver Factura"}
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -549,96 +547,17 @@ export default function FinanzasPage() {
         </div>
       </main>
 
-      {/* Modal de Detalle de Factura */}
-      <Dialog open={isDetalleOpen} onOpenChange={setIsDetalleOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Detalle de Factura #{selectedFactura?.IdFactura}</DialogTitle>
-            <DialogDescription>
-              Información completa de la factura
-            </DialogDescription>
-          </DialogHeader>
-          {selectedFactura && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-500">Árbitro</p>
-                  <p className="font-semibold">{selectedFactura.NombreArbitro}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Estado</p>
-                  <div>{getEstadoBadge(selectedFactura.Estado)}</div>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Torneo</p>
-                  <p className="font-semibold">{selectedFactura.NombreTorneo}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Monto</p>
-                  <p className="font-semibold text-lg text-green-600">
-                    ${selectedFactura.Monto.toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Fecha del Partido</p>
-                  <p className="font-semibold">
-                    {selectedFactura.FechaPartido
-                      ? format(
-                          new Date(selectedFactura.FechaPartido),
-                          "dd/MM/yyyy",
-                          { locale: es }
-                        )
-                      : "Sin fecha"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Hora del Partido</p>
-                  <p className="font-semibold">
-                    {selectedFactura.HoraPartido || "Sin hora"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Equipos</p>
-                  <p className="font-semibold">
-                    {selectedFactura.EquipoA || "TBD"} vs{" "}
-                    {selectedFactura.EquipoB || "TBD"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Fecha de Creación</p>
-                  <p className="font-semibold">
-                    {format(
-                      new Date(selectedFactura.FechaCreacion),
-                      "dd/MM/yyyy HH:mm",
-                      { locale: es }
-                    )}
-                  </p>
-                </div>
-                {selectedFactura.FechaPago && (
-                  <>
-                    <div>
-                      <p className="text-sm text-gray-500">Fecha de Pago</p>
-                      <p className="font-semibold">
-                        {format(
-                          new Date(selectedFactura.FechaPago),
-                          "dd/MM/yyyy HH:mm",
-                          { locale: es }
-                        )}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Método de Pago</p>
-                      <p className="font-semibold">
-                        {selectedFactura.MetodoPago || "No especificado"}
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Modal de Factura/Recibo */}
+      {facturaSeleccionada && (
+        <FacturaArbitro
+          open={mostrarFactura}
+          onClose={() => {
+            setMostrarFactura(false);
+            setFacturaSeleccionada(null);
+          }}
+          factura={facturaSeleccionada}
+        />
+      )}
 
       {/* Comprobante para impresión */}
       {comprobante && (
