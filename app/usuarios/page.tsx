@@ -567,11 +567,13 @@ export default function UsuariosPage() {
                                       disabled
                                     />
                                     <span className="ml-2">
-                                      {u.estadoUsuario === 1
-                                        ? "Activo"
-                                        : u.estadoUsuario === 2
-                                        ? "Pendiente"
-                                        : "Inactivo"}
+                                      {u.estadoUsuario === 1 ? (
+                                        <span className="text-green-600 font-medium">Activo</span>
+                                      ) : u.estadoUsuario === 2 ? (
+                                        <span className="text-amber-600 font-medium">Pendiente</span>
+                                      ) : (
+                                        <span className="text-red-600 font-medium">Inactivo</span>
+                                      )}
                                     </span>
                                   </div>
                                 ) : u.estadoUsuario === 2 ? (
@@ -650,9 +652,11 @@ export default function UsuariosPage() {
                                       }}
                                     />
                                     <span className="ml-2">
-                                      {u.estadoUsuario === 1
-                                        ? "Activo"
-                                        : "Inactivo"}
+                                      {u.estadoUsuario === 1 ? (
+                                        <span className="text-green-600 font-medium">Activo</span>
+                                      ) : (
+                                        <span className="text-red-600 font-medium">Inactivo</span>
+                                      )}
                                     </span>
                                   </div>
                                 )}

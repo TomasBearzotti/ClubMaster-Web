@@ -1,0 +1,8 @@
+# Ignorar todos los archivos de backup
+*.bak
+*.trn
+*.dif
+
+# Ignorar todos los archivos excepto este .gitignore
+*
+!.gitignore

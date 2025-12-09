@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
   Database,
@@ -19,6 +21,7 @@ import {
   RefreshCw,
   FileArchive,
   Info,
+  ArrowLeft,
 } from "lucide-react";
 
 interface BackupHistoryItem {
@@ -44,19 +47,33 @@ interface DatabaseInfo {
   RecoveryModel: string;
   State: string;
   TotalSizeMB: number;
+  TotalBackupSizeMB: number;
 }
 
 export default function BackupsPage() {
+  const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<BackupHistoryItem[]>([]);
   const [lastBackups, setLastBackups] = useState<LastBackup[]>([]);
   const [dbInfo, setDbInfo] = useState<DatabaseInfo | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [backupPath, setBackupPath] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<string>("execute");
 
   useEffect(() => {
+    // Obtener la ruta absoluta de la carpeta backups del proyecto
+    const projectPath = process.cwd ? process.cwd() : "";
+    setBackupPath(projectPath ? `${projectPath}\\backups` : ".\\backups");
     loadBackupInfo();
   }, []);
+  
+  // Refrescar cuando se cambia a la tab de historial
+  useEffect(() => {
+    if (activeTab === "history") {
+      loadBackupInfo();
+    }
+  }, [activeTab]);
 
   const loadBackupInfo = async () => {
     setLoading(true);
@@ -174,6 +191,34 @@ export default function BackupsPage() {
     }
   };
 
+  const getTimeAgo = (dateString: string) => {
+    const now = new Date();
+    const past = new Date(dateString);
+    const diffMs = now.getTime() - past.getTime();
+    
+    const minutes = Math.floor(diffMs / (1000 * 60));
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (days > 0) {
+      const remainingHours = hours % 24;
+      if (remainingHours > 0) {
+        return `Hace ${days}d ${remainingHours}h`;
+      }
+      return `Hace ${days}d`;
+    } else if (hours > 0) {
+      const remainingMinutes = minutes % 60;
+      if (remainingMinutes > 0) {
+        return `Hace ${hours}h ${remainingMinutes}m`;
+      }
+      return `Hace ${hours}h`;
+    } else if (minutes > 0) {
+      return `Hace ${minutes}m`;
+    } else {
+      return "Hace menos de 1m";
+    }
+  };
+
   const getBackupTypeIcon = (type: string) => {
     switch (type) {
       case "FULL":
@@ -194,6 +239,7 @@ export default function BackupsPage() {
       day: "2-digit",
       hour: "2-digit",
       minute: "2-digit",
+      hour12: false,
     });
   };
 
@@ -216,10 +262,16 @@ export default function BackupsPage() {
             Resguardo y restauración de la base de datos ClubMaster
           </p>
         </div>
-        <Button onClick={loadBackupInfo} disabled={loading} variant="outline">
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-          Actualizar
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={loadBackupInfo} disabled={loading} variant="outline">
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            Actualizar
+          </Button>
+          <Button onClick={() => router.push("/dashboard")} variant="outline">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Volver
+          </Button>
+        </div>
       </div>
 
       {/* Información de la Base de Datos */}
@@ -234,7 +286,10 @@ export default function BackupsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{dbInfo.DatabaseName}</div>
-              <Badge variant="outline" className="mt-2">
+              <Badge 
+                variant="outline" 
+                className={`mt-2 ${dbInfo.State === 'ONLINE' ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}
+              >
                 {dbInfo.State}
               </Badge>
             </CardContent>
@@ -244,13 +299,13 @@ export default function BackupsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <HardDrive className="h-4 w-4" />
-                Tamaño Total
+                Tamaño Backups
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{dbInfo.TotalSizeMB?.toFixed(2) ?? '0.00'} MB</div>
+              <div className="text-2xl font-bold">{dbInfo.TotalBackupSizeMB?.toFixed(2) ?? '0.00'} MB</div>
               <p className="text-xs text-muted-foreground mt-2">
-                Datos + Log
+                Carpeta completa
               </p>
             </CardContent>
           </Card>
@@ -321,7 +376,7 @@ export default function BackupsPage() {
                 </div>
                 <div>
                   <p className={`text-sm font-semibold ${getStatusColor(backup.HoursSinceLast)}`}>
-                    Hace {backup.HoursSinceLast} horas
+                    {getTimeAgo(backup.LastBackup)}
                   </p>
                 </div>
               </div>
@@ -331,7 +386,7 @@ export default function BackupsPage() {
       </Card>
 
       {/* Tabs de Operaciones */}
-      <Tabs defaultValue="ejecutar" className="w-full">
+      <Tabs defaultValue="ejecutar" className="w-full" onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="ejecutar">Ejecutar Backup</TabsTrigger>
           <TabsTrigger value="historial">Historial</TabsTrigger>
@@ -343,7 +398,30 @@ export default function BackupsPage() {
           <Alert>
             <Info className="h-4 w-4" />
             <AlertDescription>
-              Seleccione el tipo de backup a realizar. Los archivos se guardarán en C:\Backups\ClubMaster\
+              <div className="space-y-3">
+                <p>
+                  <strong>Ubicación de Backups:</strong> Los archivos se guardarán en la carpeta del proyecto.
+                </p>
+                <div className="flex gap-2 items-center">
+                  <Input
+                    value={backupPath || "./backups"}
+                    readOnly
+                    className="font-mono text-sm bg-muted"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled
+                    title="La carpeta de backups está en el proyecto"
+                  >
+                    <HardDrive className="h-4 w-4 mr-2" />
+                    Carpeta del Proyecto
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  ✓ Los backups se guardan en <code className="bg-muted px-1 rounded">./backups</code> dentro del proyecto (ignorados por Git)
+                </p>
+              </div>
             </AlertDescription>
           </Alert>
 
@@ -471,7 +549,7 @@ export default function BackupsPage() {
                         {item.CompressedSizeMB.toFixed(2)} MB
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {item.DurationSeconds}s
+                        {getTimeAgo(item.FinishDate)}
                       </div>
                     </div>
                   </div>
@@ -483,6 +561,92 @@ export default function BackupsPage() {
 
         {/* Tab: Mantenimiento */}
         <TabsContent value="mantenimiento" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Info className="h-5 w-5" />
+                Modo de Recuperación
+              </CardTitle>
+              <CardDescription>
+                Cambiar entre modo SIMPLE y FULL
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between p-4 border rounded-lg bg-muted">
+                <div>
+                  <p className="font-medium">Modo actual:</p>
+                  <p className="text-2xl font-bold">{dbInfo?.RecoveryModel || "SIMPLE"}</p>
+                </div>
+                <Badge variant="outline" className="text-lg px-4 py-2">
+                  {dbInfo?.RecoveryModel === "FULL" ? "Recuperación Completa" : "Recuperación Simple"}
+                </Badge>
+              </div>
+
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  {dbInfo?.RecoveryModel === "SIMPLE" ? (
+                    <>
+                      <strong>Modo SIMPLE:</strong> El log se limpia automáticamente. Solo podés restaurar hasta el último backup completo o diferencial.
+                      <p className="mt-2">
+                        <strong>Cambiar a FULL:</strong> Permite backups de LOG y recuperación point-in-time (a cualquier momento específico).
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <strong>Modo FULL:</strong> Permite recuperación a cualquier punto en el tiempo. Requiere backups de LOG frecuentes.
+                      <p className="mt-2">
+                        <strong>Cambiar a SIMPLE:</strong> El log se limpiará automáticamente, pero perderás la capacidad de recuperación point-in-time.
+                      </p>
+                    </>
+                  )}
+                </AlertDescription>
+              </Alert>
+
+              <Button
+                onClick={async () => {
+                  const newMode = dbInfo?.RecoveryModel === "SIMPLE" ? "FULL" : "SIMPLE";
+                  setIsExecuting(true);
+                  try {
+                    const response = await fetch("/api/backups/recovery-model", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ mode: newMode }),
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                      toast({
+                        title: "Éxito",
+                        description: `Modo de recuperación cambiado a ${newMode}`,
+                      });
+                      loadBackupInfo();
+                    } else {
+                      toast({
+                        title: "Error",
+                        description: data.message,
+                        variant: "destructive",
+                      });
+                    }
+                  } catch (error) {
+                    toast({
+                      title: "Error",
+                      description: "No se pudo cambiar el modo de recuperación",
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setIsExecuting(false);
+                  }
+                }}
+                disabled={isExecuting}
+                variant="outline"
+                className="w-full"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Cambiar a {dbInfo?.RecoveryModel === "SIMPLE" ? "FULL" : "SIMPLE"}
+              </Button>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
