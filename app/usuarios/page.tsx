@@ -157,6 +157,8 @@ export default function UsuariosPage() {
   const [editingPermiso, setEditingPermiso] = useState<any | null>(null);
   const [deletingPermiso, setDeletingPermiso] = useState<any | null>(null);
   const [addingPermiso, setAddingPermiso] = useState(false);
+  const [addingSubPermiso, setAddingSubPermiso] = useState<string | null>(null);
+  const [expandedPermiso, setExpandedPermiso] = useState<string | null>(null);
   const [permisosDisponibles, setPermisosDisponibles] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [usuarios, setUsuarios] = useState<any[]>([]);
@@ -472,8 +474,7 @@ export default function UsuariosPage() {
       {/* Main */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h2 className="text-3xl font-bold mb-6 flex items-center gap-2">
-          <UserCog className="h-8 w-8 text-blue-600" /> Gestión de Usuarios y
-          Roles
+          <UserCog className="h-8 w-8 text-blue-600" /> Gestión de Seguridad
         </h2>
         <Tabs defaultValue="usuarios">
           <div className="flex items-center justify-between mb-6">
@@ -959,7 +960,7 @@ export default function UsuariosPage() {
                   <div>
                     <CardTitle>Permisos</CardTitle>
                     <CardDescription className="mt-1">
-                      Listado de permisos disponibles
+                      Listado de permisos disponibles (padres e hijos)
                     </CardDescription>
                   </div>
 
@@ -975,7 +976,7 @@ export default function UsuariosPage() {
                       onClick={() => setAddingPermiso(true)}
                       className="bg-blue-600 hover:bg-blue-700 w-64"
                     >
-                      <UserPlus className="h-5 w-5 mr-2" /> Agregar Permiso
+                      <UserPlus className="h-5 w-5 mr-2" /> Agregar Permiso Padre
                     </Button>
                   </div>
                 </div>
@@ -990,38 +991,117 @@ export default function UsuariosPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {permisosDisponibles
-                      .filter(
+                    {(() => {
+                      // Filtrar y separar permisos padres e hijos
+                      const filtered = permisosDisponibles.filter(
                         (p) =>
-                          p.id
-                            .toLowerCase()
-                            .includes(searchPermiso.toLowerCase()) ||
-                          p.descripcion
-                            .toLowerCase()
-                            .includes(searchPermiso.toLowerCase())
-                      )
-                      .map((p) => (
-                        <TableRow key={p.idPermiso}>
-                          <TableCell>{p.id}</TableCell>
-                          <TableCell>{p.descripcion}</TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setEditingPermiso(p)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setDeletingPermiso(p)}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-600" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                          p.id.toLowerCase().includes(searchPermiso.toLowerCase()) ||
+                          p.descripcion.toLowerCase().includes(searchPermiso.toLowerCase())
+                      );
+
+                      // Separar padres (no tienen ":") e hijos (tienen ":")
+                      const padres = filtered.filter((p) => !p.id.includes(":"));
+                      const hijos = filtered.filter((p) => p.id.includes(":"));
+
+                      return padres.map((p) => {
+                        // Buscar hijos de este padre
+                        const childrenPermisos = hijos.filter((h) =>
+                          h.id.startsWith(p.id + ":")
+                        );
+                        const isExpanded = expandedPermiso === p.id;
+
+                        return (
+                          <>
+                            {/* Fila del permiso padre */}
+                            <TableRow key={p.idPermiso}>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  {childrenPermisos.length > 0 && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={() =>
+                                        setExpandedPermiso(
+                                          isExpanded ? null : p.id
+                                        )
+                                      }
+                                    >
+                                      {isExpanded ? "▼" : "▶"}
+                                    </Button>
+                                  )}
+                                  <span className="font-medium">{p.id}</span>
+                                  {childrenPermisos.length > 0 && (
+                                    <Badge variant="outline" className="text-xs">
+                                      {childrenPermisos.length}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>{p.descripcion}</TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setAddingSubPermiso(p.id)}
+                                  title="Agregar subpermiso"
+                                >
+                                  <UserPlus className="h-4 w-4 text-green-600" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setEditingPermiso(p)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setDeletingPermiso(p)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+
+                            {/* Filas de permisos hijos (expandibles) */}
+                            {isExpanded &&
+                              childrenPermisos.map((child) => (
+                                <TableRow
+                                  key={child.idPermiso}
+                                  className="bg-blue-50"
+                                >
+                                  <TableCell className="pl-12">
+                                    <span className="text-sm text-gray-600">
+                                      {child.id.split(":")[1]?.trim() || child.id}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-sm text-gray-600">
+                                    {child.descripcion}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => setEditingPermiso(child)}
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => setDeletingPermiso(child)}
+                                    >
+                                      <Trash2 className="h-4 w-4 text-red-600" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                          </>
+                        );
+                      });
+                    })()}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -1317,19 +1397,22 @@ export default function UsuariosPage() {
           </Dialog>
         )}
 
-        {/* Modal Agregar Permiso */}
+        {/* Modal Agregar Permiso Padre */}
         {addingPermiso && (
           <Dialog open={true} onOpenChange={() => setAddingPermiso(false)}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Agregar Permiso</DialogTitle>
+                <DialogTitle>Agregar Permiso Padre</DialogTitle>
+                <DialogDescription>
+                  Los permisos padres no deben contener ":" en su nombre
+                </DialogDescription>
               </DialogHeader>
               <form className="space-y-4">
                 <div>
                   <Label>Nombre</Label>
                   <Input
                     id="nuevoNombre"
-                    placeholder="Identificador del permiso"
+                    placeholder="Identificador del permiso (ej: Gestión de Usuarios)"
                   />
                 </div>
                 <div>
@@ -1351,9 +1434,80 @@ export default function UsuariosPage() {
                         "nuevoDescripcion"
                       ) as HTMLInputElement
                     ).value;
+                    
+                    if (nombre.includes(":")) {
+                      alert("El nombre del permiso padre no debe contener ':'");
+                      return;
+                    }
+                    
                     await createPermiso(nombre, descripcion);
                     setAddingPermiso(false);
                   }}
+                >
+                  Guardar
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Modal Agregar Subpermiso */}
+        {addingSubPermiso && (
+          <Dialog open={true} onOpenChange={() => setAddingSubPermiso(null)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Agregar Subpermiso</DialogTitle>
+                <DialogDescription>
+                  Agregar un permiso hijo para: <strong>{addingSubPermiso}</strong>
+                </DialogDescription>
+              </DialogHeader>
+              <form className="space-y-4">
+                <div>
+                  <Label>Nombre del Subpermiso</Label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">{addingSubPermiso}:</span>
+                    <Input
+                      id="nuevoSubNombre"
+                      placeholder="Nombre del hijo (ej: Crear, Editar, Eliminar)"
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label>Descripción</Label>
+                  <Input
+                    id="nuevoSubDescripcion"
+                    placeholder="Descripción del subpermiso"
+                  />
+                </div>
+              </form>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setAddingSubPermiso(null)}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={async () => {
+                    const subNombre = (
+                      document.getElementById("nuevoSubNombre") as HTMLInputElement
+                    ).value.trim();
+                    const descripcion = (
+                      document.getElementById(
+                        "nuevoSubDescripcion"
+                      ) as HTMLInputElement
+                    ).value;
+                    
+                    if (!subNombre) {
+                      alert("Debe ingresar un nombre para el subpermiso");
+                      return;
+                    }
+                    
+                    const nombreCompleto = `${addingSubPermiso}: ${subNombre}`;
+                    await createPermiso(nombreCompleto, descripcion);
+                    setAddingSubPermiso(null);
+                    // Expandir automáticamente el padre
+                    setExpandedPermiso(addingSubPermiso);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700"
                 >
                   Guardar
                 </Button>
@@ -1367,20 +1521,49 @@ export default function UsuariosPage() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Editar Permiso</DialogTitle>
+                <DialogDescription>
+                  {editingPermiso.id.includes(":")
+                    ? `Editando subpermiso de: ${editingPermiso.id.split(":")[0]}`
+                    : "Editando permiso padre"}
+                </DialogDescription>
               </DialogHeader>
               <form className="space-y-4">
-                <div>
-                  <Label>Nombre</Label>
-                  <Input
-                    value={editingPermiso.id}
-                    onChange={(e) =>
-                      setEditingPermiso({
-                        ...editingPermiso,
-                        id: e.target.value,
-                      })
-                    }
-                  />
-                </div>
+                {editingPermiso.id.includes(":") ? (
+                  // Si es hijo, mostrar padre + input para hijo
+                  <div>
+                    <Label>Nombre del Subpermiso</Label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">
+                        {editingPermiso.id.split(":")[0]}:
+                      </span>
+                      <Input
+                        value={editingPermiso.id.split(":")[1]?.trim() || ""}
+                        onChange={(e) => {
+                          const padre = editingPermiso.id.split(":")[0];
+                          setEditingPermiso({
+                            ...editingPermiso,
+                            id: `${padre}: ${e.target.value}`,
+                          });
+                        }}
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  // Si es padre, permitir editar nombre completo
+                  <div>
+                    <Label>Nombre</Label>
+                    <Input
+                      value={editingPermiso.id}
+                      onChange={(e) =>
+                        setEditingPermiso({
+                          ...editingPermiso,
+                          id: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                )}
                 <div>
                   <Label>Descripción</Label>
                   <Input
@@ -1395,6 +1578,9 @@ export default function UsuariosPage() {
                 </div>
               </form>
               <DialogFooter>
+                <Button variant="outline" onClick={() => setEditingPermiso(null)}>
+                  Cancelar
+                </Button>
                 <Button
                   onClick={async () => {
                     await updatePermiso(

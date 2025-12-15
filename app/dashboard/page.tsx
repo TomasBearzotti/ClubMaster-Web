@@ -523,14 +523,14 @@ export default function DashboardPage() {
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-lg font-semibold">
-                  Gestión de Usuarios
+                  Gestión de Seguridad y Backups
                 </CardTitle>
                 <Users className="h-6 w-6 text-indigo-600" />
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
                   Administra las cuentas de acceso y roles de los usuarios del
-                  sistema.
+                  sistema como tambien los Bakcups.
                 </p>
               </CardContent>
             </Card>
