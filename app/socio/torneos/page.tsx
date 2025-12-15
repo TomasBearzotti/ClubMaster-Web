@@ -1343,8 +1343,6 @@ export default function TorneosPage() {
               const torneoDetalle = torneosDetalle[torneo.IdTorneo];
               const participantes =
                 participantesPorTorneo[torneo.IdTorneo] || [];
-              const torneoDetalleActual =
-                torneosDetalle[torneo.IdTorneo] || torneo;
               const partidos = partidosPorTorneo[torneo.IdTorneo] || [];
               const cargandoDetalle = loadingDetalles.has(torneo.IdTorneo);
 
@@ -1498,10 +1496,9 @@ export default function TorneosPage() {
                                   Participantes
                                 </h4>
                                 <p className="text-sm">
-                                  {torneoDetalleActual.Participantes ||
-                                    participantes.length}
-                                  {torneoDetalleActual.MaxParticipantes &&
-                                    ` / ${torneoDetalleActual.MaxParticipantes}`}
+                                  {participantes.length}
+                                  {torneoDetalle.MaxParticipantes &&
+                                    ` / ${torneoDetalle.MaxParticipantes}`}
                                 </p>
                               </div>
                               <div>
@@ -1566,8 +1563,7 @@ export default function TorneosPage() {
 
                             {/* Contenido Principal: Participantes y Partidos */}
                             {/* Si es torneo de eliminación (bracket), mostrar en modo especial */}
-                            {torneosDetalle[torneo.IdTorneo]?.TipoTorneo ===
-                            1 ? (
+                            {torneoDetalle.TipoTorneo === 1 ? (
                               <div className="space-y-4">
                                 {/* Participantes en una fila horizontal compacta */}
                                 <Card>

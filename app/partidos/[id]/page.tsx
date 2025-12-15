@@ -274,6 +274,59 @@ export default function PartidoDetallePage() {
     return !isNaN(Number.parseFloat(valor || ""));
   };
 
+  // Determinar si el deporte debe mostrar Radar Chart
+  const shouldShowRadarChart = () => {
+    if (!partido) return false;
+    // Radar Chart funciona bien para deportes con métricas similares
+    // Tenis, Paddle y Básquet: SI
+    // Fútbol: NO (goles vs tarjetas vs minutos no tiene sentido visual)
+    return [2, 3, 4].includes(partido.IdDeporte); // Básquet, Tenis, Paddle
+  };
+
+  // Determinar si debe mostrar gráficos especiales
+  const getDeporteSpecificCharts = () => {
+    if (!partido) return [];
+    const charts: string[] = [];
+    
+    switch (partido.IdDeporte) {
+      case 1: // Fútbol
+        // Para fútbol, separar goles/asistencias de tarjetas
+        charts.push('tarjetas-timeline');
+        break;
+      case 2: // Básquet
+        // Para básquet, mostrar eficiencia
+        charts.push('eficiencia');
+        break;
+      case 3: // Tenis
+      case 4: // Paddle
+        // Para tenis/paddle, destacar estadísticas de servicio
+        charts.push('servicio');
+        break;
+    }
+    return charts;
+  };
+
+  // Filtrar estadísticas según el tipo de gráfico
+  const getStatsForChart = (type: 'principal' | 'secundario') => {
+    if (!partido) return estadisticasAgrupadas;
+    
+    if (partido.IdDeporte === 1) { // Fútbol
+      if (type === 'principal') {
+        // Solo goles, asistencias, minutos jugados
+        return estadisticasAgrupadas.filter(s => 
+          ['Goles', 'Asistencias', 'Minutos Jugados'].includes(s.nombre)
+        );
+      } else {
+        // Tarjetas
+        return estadisticasAgrupadas.filter(s => 
+          s.nombre.toLowerCase().includes('tarjeta')
+        );
+      }
+    }
+    
+    return estadisticasAgrupadas;
+  };
+
   const handleVolver = () => {
     router.back();
   };
@@ -690,126 +743,320 @@ export default function PartidoDetallePage() {
                 </Card>
               ) : (
                 <>
-                  {/* 1) Pie Charts para porcentaje */}
-                  {estadisticasAgrupadas
-                    .filter((s) =>
-                      /porcentaje|%|accuracy/i.test(s.nombre.toLowerCase())
-                    )
-                    .map((s) => {
-                      const pieData = [
-                        {
-                          name: partido.ParticipanteA,
-                          value: parseFloat(String(s.valorA)) || 0,
-                        },
-                        {
-                          name: partido.ParticipanteB,
-                          value: parseFloat(String(s.valorB)) || 0,
-                        },
-                      ];
-                      return (
-                        <Card key={s.nombre}>
+                  {/* Gráficos según tipo de deporte */}
+                  {partido.IdDeporte === 1 && (
+                    /* FÚTBOL: Separar goles/asistencias de tarjetas */
+                    <>
+                      {/* Goles y Asistencias */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Desempeño Ofensivo</CardTitle>
+                          <CardDescription>
+                            Goles y asistencias
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={300}>
+                            <BarChart
+                              layout="vertical"
+                              data={getStatsForChart('principal')}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis type="number" />
+                              <YAxis type="category" dataKey="nombre" />
+                              <Tooltip />
+                              <Legend />
+                              <Bar
+                                dataKey="valorA"
+                                name={partido.ParticipanteA}
+                                fill="#10b981"
+                                barSize={20}
+                              />
+                              <Bar
+                                dataKey="valorB"
+                                name={partido.ParticipanteB}
+                                fill="#f59e0b"
+                                barSize={20}
+                              />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+
+                      {/* Tarjetas */}
+                      {getStatsForChart('secundario').length > 0 && (
+                        <Card>
                           <CardHeader>
-                            <CardTitle>{s.nombre}</CardTitle>
+                            <CardTitle>Disciplina</CardTitle>
+                            <CardDescription>
+                              Tarjetas amarillas y rojas
+                            </CardDescription>
                           </CardHeader>
                           <CardContent>
                             <ResponsiveContainer width="100%" height={250}>
-                              <RechartsPieChart>
-                                <Pie
-                                  data={pieData}
-                                  cx="50%"
-                                  cy="50%"
-                                  outerRadius={80}
-                                  label
-                                  dataKey={""}
-                                >
-                                  {pieData.map((_, i) => (
-                                    <Cell
-                                      key={i}
-                                      fill={i === 0 ? "#2563eb" : "#dc2626"}
-                                    />
-                                  ))}
-                                </Pie>
+                              <BarChart data={getStatsForChart('secundario')}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="nombre" />
+                                <YAxis />
                                 <Tooltip />
                                 <Legend />
-                              </RechartsPieChart>
+                                <Bar
+                                  dataKey="valorA"
+                                  name={partido.ParticipanteA}
+                                  fill="#2563eb"
+                                  stackId="a"
+                                />
+                                <Bar
+                                  dataKey="valorB"
+                                  name={partido.ParticipanteB}
+                                  fill="#dc2626"
+                                  stackId="a"
+                                />
+                              </BarChart>
                             </ResponsiveContainer>
                           </CardContent>
                         </Card>
-                      );
-                    })}
+                      )}
+                    </>
+                  )}
 
-                  {/* 2) BarChart horizontal enfrentado */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Comparación directa</CardTitle>
-                      <CardDescription>
-                        {partido.ParticipanteA} vs {partido.ParticipanteB}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <ResponsiveContainer width="100%" height={400}>
-                        <BarChart
-                          layout="vertical"
-                          data={estadisticasAgrupadas}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis type="number" />
-                          <YAxis type="category" dataKey="nombre" />
-                          <Tooltip />
-                          <Legend />
-                          <Bar
-                            dataKey="valorA"
-                            name={partido.ParticipanteA}
-                            fill="#2563eb"
-                            barSize={15}
-                          />
-                          <Bar
-                            dataKey="valorB"
-                            name={partido.ParticipanteB}
-                            fill="#dc2626"
-                            barSize={15}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
+                  {partido.IdDeporte === 2 && (
+                    /* BÁSQUET: Barras + Radar para rendimiento integral */
+                    <>
+                      {/* Comparación Principal */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Estadísticas del Partido</CardTitle>
+                          <CardDescription>
+                            {partido.ParticipanteA} vs {partido.ParticipanteB}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={400}>
+                            <BarChart
+                              layout="vertical"
+                              data={estadisticasAgrupadas}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis type="number" />
+                              <YAxis type="category" dataKey="nombre" width={120} />
+                              <Tooltip />
+                              <Legend />
+                              <Bar
+                                dataKey="valorA"
+                                name={partido.ParticipanteA}
+                                fill="#2563eb"
+                                barSize={18}
+                              />
+                              <Bar
+                                dataKey="valorB"
+                                name={partido.ParticipanteB}
+                                fill="#dc2626"
+                                barSize={18}
+                              />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
 
-                  {/* 3) Radar Chart resumen global */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Resumen Global</CardTitle>
-                      <CardDescription>
-                        Comparación multivariable
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <ResponsiveContainer width="100%" height={400}>
-                        <RadarChart
-                          outerRadius={150}
-                          data={estadisticasAgrupadas}
-                        >
-                          <PolarGrid />
-                          <PolarAngleAxis dataKey="nombre" />
-                          <PolarRadiusAxis />
-                          <Radar
-                            name={partido.ParticipanteA}
-                            dataKey="valorA"
-                            stroke="#2563eb"
-                            fill="#2563eb"
-                            fillOpacity={0.6}
-                          />
-                          <Radar
-                            name={partido.ParticipanteB}
-                            dataKey="valorB"
-                            stroke="#dc2626"
-                            fill="#dc2626"
-                            fillOpacity={0.6}
-                          />
-                          <Legend />
-                        </RadarChart>
-                      </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
+                      {/* Radar Chart */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Análisis Integral</CardTitle>
+                          <CardDescription>
+                            Rendimiento multidimensional
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={400}>
+                            <RadarChart
+                              outerRadius={120}
+                              data={estadisticasAgrupadas}
+                            >
+                              <PolarGrid />
+                              <PolarAngleAxis dataKey="nombre" />
+                              <PolarRadiusAxis />
+                              <Radar
+                                name={partido.ParticipanteA}
+                                dataKey="valorA"
+                                stroke="#2563eb"
+                                fill="#2563eb"
+                                fillOpacity={0.6}
+                              />
+                              <Radar
+                                name={partido.ParticipanteB}
+                                dataKey="valorB"
+                                stroke="#dc2626"
+                                fill="#dc2626"
+                                fillOpacity={0.6}
+                              />
+                              <Legend />
+                            </RadarChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+                    </>
+                  )}
+
+                  {(partido.IdDeporte === 3 || partido.IdDeporte === 4) && (
+                    /* TENIS/PADDLE: Enfoque en estadísticas de servicio y calidad */
+                    <>
+                      {/* Resultado por Sets/Games */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Resultados</CardTitle>
+                          <CardDescription>
+                            Sets y games ganados
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={300}>
+                            <BarChart
+                              layout="vertical"
+                              data={estadisticasAgrupadas.filter(s => 
+                                s.nombre.toLowerCase().includes('set') || 
+                                s.nombre.toLowerCase().includes('game')
+                              )}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis type="number" />
+                              <YAxis type="category" dataKey="nombre" />
+                              <Tooltip />
+                              <Legend />
+                              <Bar
+                                dataKey="valorA"
+                                name={partido.ParticipanteA}
+                                fill="#10b981"
+                                barSize={25}
+                              />
+                              <Bar
+                                dataKey="valorB"
+                                name={partido.ParticipanteB}
+                                fill="#f59e0b"
+                                barSize={25}
+                              />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+
+                      {/* Calidad de Juego */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Calidad de Juego</CardTitle>
+                          <CardDescription>
+                            Aces, winners y errores
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={350}>
+                            <RadarChart
+                              outerRadius={120}
+                              data={estadisticasAgrupadas.filter(s => 
+                                !s.nombre.toLowerCase().includes('set') && 
+                                !s.nombre.toLowerCase().includes('game')
+                              )}
+                            >
+                              <PolarGrid />
+                              <PolarAngleAxis dataKey="nombre" />
+                              <PolarRadiusAxis />
+                              <Radar
+                                name={partido.ParticipanteA}
+                                dataKey="valorA"
+                                stroke="#10b981"
+                                fill="#10b981"
+                                fillOpacity={0.6}
+                              />
+                              <Radar
+                                name={partido.ParticipanteB}
+                                dataKey="valorB"
+                                stroke="#f59e0b"
+                                fill="#f59e0b"
+                                fillOpacity={0.6}
+                              />
+                              <Legend />
+                            </RadarChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+
+                      {/* Comparación Completa */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Resumen Completo</CardTitle>
+                          <CardDescription>
+                            Todas las estadísticas
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={400}>
+                            <BarChart
+                              layout="vertical"
+                              data={estadisticasAgrupadas}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis type="number" />
+                              <YAxis type="category" dataKey="nombre" width={100} />
+                              <Tooltip />
+                              <Legend />
+                              <Bar
+                                dataKey="valorA"
+                                name={partido.ParticipanteA}
+                                fill="#2563eb"
+                                barSize={15}
+                              />
+                              <Bar
+                                dataKey="valorB"
+                                name={partido.ParticipanteB}
+                                fill="#dc2626"
+                                barSize={15}
+                              />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+                    </>
+                  )}
+
+                  {/* Fallback para otros deportes */}
+                  {![1, 2, 3, 4].includes(partido.IdDeporte) && (
+                    <>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Comparación Directa</CardTitle>
+                          <CardDescription>
+                            {partido.ParticipanteA} vs {partido.ParticipanteB}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={400}>
+                            <BarChart
+                              layout="vertical"
+                              data={estadisticasAgrupadas}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis type="number" />
+                              <YAxis type="category" dataKey="nombre" />
+                              <Tooltip />
+                              <Legend />
+                              <Bar
+                                dataKey="valorA"
+                                name={partido.ParticipanteA}
+                                fill="#2563eb"
+                                barSize={15}
+                              />
+                              <Bar
+                                dataKey="valorB"
+                                name={partido.ParticipanteB}
+                                fill="#dc2626"
+                                barSize={15}
+                              />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+                    </>
+                  )}
                 </>
               )}
             </div>
